@@ -59,6 +59,24 @@ def build_indexed_samples(details):
     return samples
 
 
+def filter_pace_outliers(speed_series, min_ratio=0.35, abs_floor=0.3):
+    """Null out samples far slower than the activity's own typical pace.
+
+    A brief full stop (warmup stretch, traffic light) reads as a near-zero
+    speed sample, which turns into an enormous pace spike (pace = 1/speed)
+    that dwarfs the rest of the chart. Real pace variation (surges, hills,
+    fatigue) stays well within a fraction of the activity's median moving
+    speed, so anything below that band is a stop, not a slow point, and
+    gets treated as missing data (a gap) rather than plotted.
+    """
+    valid = sorted(s for s in speed_series if s is not None and s > 0.05)
+    if len(valid) < 5:
+        return speed_series
+    median = valid[len(valid) // 2]
+    floor = max(abs_floor, median * min_ratio)
+    return [s if (s is not None and s >= floor) else None for s in speed_series]
+
+
 def resample_by_distance(samples, target_points=TARGET_POINTS):
     with_dist = [s for s in samples if s["distance_m"] is not None]
     if len(with_dist) < 2:
@@ -85,6 +103,7 @@ def resample_by_distance(samples, target_points=TARGET_POINTS):
         out["speed_mps"].append(round(speed_s[j], 3) if speed_s[j] is not None else None)
         out["elevation_m"].append(round(elev_s[j], 1) if elev_s[j] is not None else None)
         out["cadence"].append(round(cad_s[j], 1) if cad_s[j] is not None else None)
+    out["speed_mps"] = filter_pace_outliers(out["speed_mps"])
     return out
 
 

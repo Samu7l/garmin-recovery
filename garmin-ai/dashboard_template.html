@@ -94,6 +94,16 @@
   }
   .card h2 { font-size: 14.5px; font-weight: 620; margin: 0 0 2px; }
   .card .card-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+  .card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .card-header-row h2 { flex: none; }
+  .chart-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; }
+  .toggle-btn {
+    font-family: inherit; font-size: 11.5px; color: var(--text-secondary); background: var(--surface-1);
+    border: none; padding: 5px 10px; cursor: pointer;
+  }
+  .toggle-btn + .toggle-btn { border-left: 1px solid var(--border); }
+  .toggle-btn.active { background: var(--series-1); color: #fff; }
+  .toggle-btn:hover:not(.active) { background: var(--series-1-wash); }
   .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; flex-wrap: wrap; }
   .legend .key { display: inline-flex; align-items: center; gap: 6px; }
   .legend .swatch-line { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
@@ -239,8 +249,14 @@
     </div>
 
     <div class="card" id="paceCard">
-      <h2 id="paceCardTitle">Pace</h2>
-      <div class="card-sub">vs distance</div>
+      <div class="card-header-row">
+        <h2 id="paceCardTitle">Pace</h2>
+        <div class="chart-toggle" id="paceToggle" hidden>
+          <button class="toggle-btn active" data-mode="distance">By distance</button>
+          <button class="toggle-btn" data-mode="laps">By lap</button>
+        </div>
+      </div>
+      <div class="card-sub" id="paceCardSub">vs distance</div>
       <div class="chart-wrap"><svg id="detailPaceChart" viewBox="0 0 800 200"></svg></div>
     </div>
 
@@ -643,6 +659,43 @@ document.getElementById('note').innerHTML =
 const viewOverview = document.getElementById('view-overview');
 const viewDetail = document.getElementById('view-detail');
 
+let paceMode = 'distance';
+let paceCtx = null;
+
+function renderPaceChart() {
+  if (!paceCtx) return;
+  const { rows, xLabel, laps, running, type } = paceCtx;
+  const label = running ? 'Pace' : 'Speed';
+  const valueFmt = v => running ? formatPaceOrSpeed((1000 / (v * 60)), type) : `${v.toFixed(1)} km/h`;
+  const svg = document.getElementById('detailPaceChart');
+  const sub = document.getElementById('paceCardSub');
+
+  if (paceMode === 'laps') {
+    sub.textContent = 'Average per lap';
+    const lapRows = laps.map(lap => ({ lap_label: 'Lap ' + lap.index, pace_val: paceOrSpeedValue(lap.avg_speed_mps, type) }));
+    const has = lapRows.some(r => r.pace_val != null);
+    document.getElementById('paceCard').hidden = !has;
+    if (has) {
+      buildChart(svg, { rows: lapRows, xLabel: r => r.lap_label, series: [{ key: 'pace_val', label, color: color('--series-2') }], mode: 'bar', valueFmt });
+    }
+  } else {
+    sub.textContent = 'vs distance';
+    const has = rows.some(r => r.pace_val != null);
+    document.getElementById('paceCard').hidden = !has;
+    if (has) {
+      buildChart(svg, { rows, xLabel, series: [{ key: 'pace_val', label, color: color('--series-2') }], mode: 'line', valueFmt });
+    }
+  }
+}
+
+document.querySelectorAll('#paceToggle .toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    paceMode = btn.dataset.mode;
+    document.querySelectorAll('#paceToggle .toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderPaceChart();
+  });
+});
+
 function showOverview() {
   viewDetail.hidden = true;
   viewOverview.hidden = false;
@@ -687,6 +740,7 @@ function showDetail(id) {
     cadence: series.cadence[i],
   }));
   const xLabel = r => `${r.distance_km.toFixed(1)} km`;
+  const laps = (d && d.laps) || [];
 
   const hasAny = (key) => rows.some(r => r[key] != null);
 
@@ -699,13 +753,12 @@ function showDetail(id) {
   }
 
   document.getElementById('paceCardTitle').textContent = running ? 'Pace' : 'Speed';
-  document.getElementById('paceCard').hidden = !hasAny('pace_val');
-  if (hasAny('pace_val')) {
-    buildChart(document.getElementById('detailPaceChart'), {
-      rows, xLabel, series: [{ key: 'pace_val', label: running ? 'Pace' : 'Speed', color: color('--series-2') }],
-      mode: 'line', valueFmt: v => running ? formatPaceOrSpeed((1000 / (v * 60)), w.type) : `${v.toFixed(1)} km/h`,
-    });
-  }
+  paceCtx = { rows, xLabel, laps, running, type: w.type };
+  paceMode = 'distance';
+  const paceToggle = document.getElementById('paceToggle');
+  paceToggle.hidden = laps.length < 2;
+  paceToggle.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'distance'));
+  renderPaceChart();
 
   document.getElementById('elevCard').hidden = !hasAny('elevation_m');
   if (hasAny('elevation_m')) {
@@ -723,7 +776,6 @@ function showDetail(id) {
     });
   }
 
-  const laps = (d && d.laps) || [];
   const lapsCard = document.getElementById('lapsCard');
   lapsCard.hidden = laps.length === 0;
   document.getElementById('lapsPaceHeader').textContent = running ? 'Avg pace' : 'Avg speed';
