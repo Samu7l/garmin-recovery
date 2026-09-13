@@ -844,9 +844,11 @@ function renderSleepGrid(year, byDate) {
 
   const cell = 11, gap = 3, cellStep = cell + gap;
   const padL = 30, padT = 16;
-  const W = padL + totalWeeks * cellStep + 4;
+  const MAX_WEEKS = 53; // fixed so cell size stays constant across years, even a partial current year
+  const W = padL + MAX_WEEKS * cellStep + 4;
   const H = padT + 7 * cellStep + 4;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMinYMin meet');
 
   let lastMonth = -1;
   for (let wi = 0; wi < totalWeeks; wi++) {
