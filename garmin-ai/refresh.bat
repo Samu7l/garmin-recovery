@@ -11,7 +11,7 @@ python build_site.py
 echo.
 echo === Publishing to GitHub ===
 cd /d "%~dp0.."
-git add -A
+git add docs/ garmin-ai/
 git commit -m "Refresh Garmin data"
 git push
 echo.
