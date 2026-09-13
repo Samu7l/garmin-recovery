@@ -64,7 +64,7 @@ def _fetch_tile(z, x, y):
     return Image.open(BytesIO(resp.content)).convert("RGB")
 
 
-def _pick_zoom(min_lat, max_lat, min_lon, max_lon, target_px=760, max_zoom=17, min_zoom=9):
+def _pick_zoom(min_lat, max_lat, min_lon, max_lon, target_px=480, max_zoom=17, min_zoom=9):
     for zoom in range(max_zoom, min_zoom - 1, -1):
         x0, y0 = latlon_to_pixel(max_lat, min_lon, zoom)
         x1, y1 = latlon_to_pixel(min_lat, max_lon, zoom)
@@ -74,7 +74,7 @@ def _pick_zoom(min_lat, max_lat, min_lon, max_lon, target_px=760, max_zoom=17, m
     return min_zoom
 
 
-def render_route_map(points, out_path, target_px=760, padding_frac=0.14):
+def render_route_map(points, out_path, target_px=480, padding_frac=0.14):
     """points: list of (lat, lon, speed_mps or None). Returns True if rendered."""
     coords = [(p[0], p[1]) for p in points if p[0] is not None and p[1] is not None]
     if len(coords) < 2:
@@ -155,5 +155,5 @@ def render_route_map(points, out_path, target_px=760, padding_frac=0.14):
     draw.text((6, h - strip_h + 2), attr, fill=(30, 30, 30, 255))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(out_path, format="PNG", optimize=True)
+    canvas.save(out_path, format="JPEG", quality=82, optimize=True)
     return True

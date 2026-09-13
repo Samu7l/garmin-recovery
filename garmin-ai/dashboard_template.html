@@ -13,6 +13,10 @@
     --series-2:       #eb6834;
     --series-3:       #1baf7a;
     --series-4:       #eda100;
+    --series-5:       #e87ba4;
+    --series-6:       #008300;
+    --series-7:       #4a3aa7;
+    --series-8:       #e34948;
     --border:         rgba(11,11,11,0.10);
     --series-1-wash:  rgba(42,120,214,0.10);
   }
@@ -30,6 +34,10 @@
       --series-2:       #d95926;
       --series-3:       #199e70;
       --series-4:       #c98500;
+      --series-5:       #d55181;
+      --series-6:       #008300;
+      --series-7:       #9085e9;
+      --series-8:       #e66767;
       --border:         rgba(255,255,255,0.10);
       --series-1-wash:  rgba(57,135,229,0.14);
     }
@@ -47,6 +55,10 @@
     --series-2:       #d95926;
     --series-3:       #199e70;
     --series-4:       #c98500;
+    --series-5:       #d55181;
+    --series-6:       #008300;
+    --series-7:       #9085e9;
+    --series-8:       #e66767;
     --border:         rgba(255,255,255,0.10);
     --series-1-wash:  rgba(57,135,229,0.14);
   }
@@ -94,6 +106,19 @@
   }
   .card h2 { font-size: 14.5px; font-weight: 620; margin: 0 0 2px; }
   .card .card-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+
+  .month-nav {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin: -4px 0 20px;
+  }
+  .month-label { font-size: 14px; font-weight: 620; min-width: 150px; text-align: center; }
+  .nav-btn {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-size: 14px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--series-1-wash); }
+  .nav-btn:disabled { opacity: 0.35; cursor: default; }
   .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; flex-wrap: wrap; }
   .legend .key { display: inline-flex; align-items: center; gap: 6px; }
   .legend .swatch-line { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
@@ -171,17 +196,29 @@
     <h1>Garmin Recovery</h1>
     <p class="subhead" id="subhead"></p>
 
+    <div class="card">
+      <h2>Year at a glance</h2>
+      <div class="card-sub">Distance per month &mdash; click a bar to jump to that month</div>
+      <div class="chart-wrap"><svg id="yearChart" viewBox="0 0 800 170"></svg></div>
+    </div>
+
+    <div class="month-nav">
+      <button class="nav-btn" id="prevMonthBtn" aria-label="Previous month">&larr;</button>
+      <span class="month-label" id="monthLabel"></span>
+      <button class="nav-btn" id="nextMonthBtn" aria-label="Next month">&rarr;</button>
+    </div>
+
     <div class="kpi-row" id="kpiRow"></div>
 
     <div class="card">
       <h2>Resting heart rate</h2>
-      <div class="card-sub">Last 30 days</div>
+      <div class="card-sub">Selected month</div>
       <div class="chart-wrap"><svg id="rhrChart" viewBox="0 0 800 220"></svg></div>
     </div>
 
     <div class="card">
       <h2>Daily steps</h2>
-      <div class="card-sub">Last 30 days</div>
+      <div class="card-sub">Selected month</div>
       <div class="chart-wrap"><svg id="stepsChart" viewBox="0 0 800 220"></svg></div>
     </div>
 
@@ -322,19 +359,19 @@ document.getElementById('subhead').textContent =
   `Steps, resting heart rate, stress, and workouts pulled from Garmin Connect — ${fmtDate(firstDay)} to ${fmtDate(lastDay)}.`;
 
 // ---------- KPI tiles (overview) ----------
-function lastNonNull(key) {
-  for (let i = DAYS.length - 1; i >= 0; i--) {
-    if (DAYS[i][key] != null) return DAYS[i];
+function lastNonNull(rows, key) {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i][key] != null) return rows[i];
   }
   return null;
 }
-function avgOf(key) {
-  const vals = DAYS.map(d => d[key]).filter(v => v != null);
+function avgOf(rows, key) {
+  const vals = rows.map(d => d[key]).filter(v => v != null);
   if (!vals.length) return null;
   return vals.reduce((a,b) => a+b, 0) / vals.length;
 }
-function sparkPath(key, w, h) {
-  const vals = DAYS.map(d => d[key]);
+function sparkPath(rows, key, w, h) {
+  const vals = rows.map(d => d[key]);
   const present = vals.map((v,i) => v != null ? i : null).filter(i => i !== null);
   if (present.length < 2) return '';
   const min = Math.min(...present.map(i => vals[i]));
@@ -384,19 +421,6 @@ function renderKpiRow(container, kpis) {
     container.appendChild(tile);
   });
 }
-
-const rhrLast = lastNonNull('resting_hr');
-const stepsAvg = avgOf('steps');
-const stressAvg = avgOf('avg_stress');
-const totalDistanceKm = WORKOUTS.reduce((a,w) => a + (w.distance_m || 0), 0) / 1000;
-
-renderKpiRow(document.getElementById('kpiRow'), [
-  { label: 'Resting heart rate', value: rhrLast ? Math.round(rhrLast.resting_hr) : '—', unit: rhrLast ? 'bpm' : '',
-    sub: rhrLast ? `as of ${fmtDate(rhrLast.date)}` : 'no recent data', sparkPath: sparkPath('resting_hr', 200, 28) },
-  { label: 'Daily steps', value: stepsAvg ? compact(stepsAvg) : '—', sub: '30-day average', sparkPath: sparkPath('steps', 200, 28) },
-  { label: 'Workouts', value: WORKOUTS.length, sub: `${totalDistanceKm.toFixed(1)} km total` },
-  { label: 'Stress', value: stressAvg ? Math.round(stressAvg) : '—', unit: '/ 100', sub: '30-day average', sparkPath: sparkPath('avg_stress', 200, 28) },
-]);
 
 // ---------- shared tooltip ----------
 const tooltipEl = document.getElementById('tooltip');
@@ -479,7 +503,7 @@ function buildChart(svg, opts) {
   }
   svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH, class: 'baseline' }));
 
-  const tickEvery = Math.max(1, Math.round(n / 6));
+  const tickEvery = opts.tickEvery || Math.max(1, Math.round(n / 6));
   for (let i = 0; i < n; i += tickEvery) {
     const lx = opts.mode === 'bar' ? xBand(i) : x(i);
     const label = el('text', { x: lx, y: H - 8, class: 'axis-label', 'text-anchor': 'middle' });
@@ -495,7 +519,11 @@ function buildChart(svg, opts) {
       if (v == null) return;
       const bx = xBand(i) - barW / 2;
       const by = y(v);
-      svg.appendChild(el('rect', { x: bx, y: by, width: barW, height: (padT + plotH) - by, rx: 4, ry: 4, fill: s.color }));
+      const isSelected = opts.selectedIndex === i;
+      svg.appendChild(el('rect', {
+        x: bx, y: by, width: barW, height: (padT + plotH) - by, rx: 4, ry: 4,
+        fill: s.color, opacity: (opts.selectedIndex == null || isSelected) ? 1 : 0.35,
+      }));
     });
   } else {
     opts.series.forEach(s => {
@@ -564,6 +592,7 @@ function buildChart(svg, opts) {
         dots[si].setAttribute('opacity', 0);
       }
     });
+    if (opts.extraRows) trows.push(...opts.extraRows(row));
     if (trows.length) showTooltip(evt.clientX, evt.clientY, trows, opts.xLabel(row));
     else hideTooltip();
   }
@@ -574,16 +603,145 @@ function buildChart(svg, opts) {
   }
   hit.addEventListener('pointermove', handleMove);
   hit.addEventListener('pointerleave', handleLeave);
+
+  if (opts.onClick) {
+    hit.style.cursor = 'pointer';
+    hit.addEventListener('click', (evt) => {
+      const rect = svg.getBoundingClientRect();
+      const px = (evt.clientX - rect.left) / rect.width * W;
+      let i = opts.mode === 'bar'
+        ? Math.min(n - 1, Math.max(0, Math.floor((px - padL) / bandW)))
+        : Math.round(((px - padL) / plotW) * (n - 1));
+      i = Math.min(n - 1, Math.max(0, i));
+      opts.onClick(rows[i], i);
+    });
+  }
 }
 
-function renderOverviewCharts() {
+// ---------- workouts table ----------
+const TYPE_META = {
+  running: { label: 'Running', color: color('--series-1') },
+  trail_running: { label: 'Trail running', color: color('--series-2') },
+  cycling: { label: 'Cycling', color: color('--series-3') },
+  rowing_v2: { label: 'Rowing', color: color('--series-4') },
+  stop_watch: { label: 'Timer', color: color('--series-5') },
+  walking: { label: 'Walking', color: color('--series-6') },
+  mountaineering: { label: 'Mountaineering', color: color('--series-7') },
+  hiking: { label: 'Hiking', color: color('--series-8') },
+};
+function prettifyType(t) {
+  return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+function typeMeta(t) { return TYPE_META[t] || { label: t ? prettifyType(t) : 'Other', color: color('--text-muted') }; }
+
+function renderWorkoutsTable(wk, monthLbl) {
+  document.getElementById('wkSub').textContent = wk.length
+    ? `${wk.length} activities in ${monthLbl} — click a row for full detail.`
+    : `No activities in ${monthLbl}.`;
+
+  const tbody = document.getElementById('wkBody');
+  tbody.innerHTML = '';
+  [...wk].reverse().forEach(w => {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.tabIndex = 0;
+    tr.setAttribute('role', 'button');
+    const tm = typeMeta(w.type);
+
+    const tdDate = document.createElement('td'); tdDate.textContent = fmtDate(w.date); tr.appendChild(tdDate);
+    const tdName = document.createElement('td'); tdName.className = 'wk-name'; tdName.textContent = w.name || '—'; tr.appendChild(tdName);
+
+    const tdType = document.createElement('td');
+    const badge = document.createElement('span'); badge.className = 'type-badge';
+    const dot = document.createElement('span'); dot.className = 'type-dot'; dot.style.background = tm.color;
+    const lbl = document.createElement('span'); lbl.textContent = tm.label;
+    badge.appendChild(dot); badge.appendChild(lbl); tdType.appendChild(badge); tr.appendChild(tdType);
+
+    const tdDist = document.createElement('td');
+    tdDist.textContent = w.distance_m != null ? (w.distance_m / 1000).toFixed(1) + ' km' : '—';
+    tr.appendChild(tdDist);
+
+    const tdDur = document.createElement('td'); tdDur.textContent = hms(w.duration_s); tr.appendChild(tdDur);
+    const tdAvgHr = document.createElement('td'); tdAvgHr.textContent = w.avg_hr != null ? Math.round(w.avg_hr) : '—'; tr.appendChild(tdAvgHr);
+    const tdMaxHr = document.createElement('td'); tdMaxHr.textContent = w.max_hr != null ? Math.round(w.max_hr) : '—'; tr.appendChild(tdMaxHr);
+
+    const tdTe = document.createElement('td');
+    const aer = w.aerobic_te != null ? w.aerobic_te.toFixed(1) : '—';
+    const anaer = w.anaerobic_te != null ? w.anaerobic_te.toFixed(1) : '—';
+    tdTe.textContent = `${aer} / ${anaer}`;
+    tr.appendChild(tdTe);
+
+    const go = () => showDetail(w.id);
+    tr.addEventListener('click', go);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('note').innerHTML =
+  '<strong>Not shown:</strong> HRV, body battery, and training readiness — Garmin returns no data for these from this device. ' +
+  'Sleep is now captured too (a better endpoint found it) but isn\'t visualized here yet. ' +
+  'This is a snapshot from the last sync — ask Claude to refresh it any time for current numbers.';
+
+// ---------- month view ----------
+function monthKey(dateStr) { return dateStr.slice(0, 7); }
+function monthsAvailable() { return [...new Set(DAYS.map(d => monthKey(d.date)))].sort(); }
+function monthLabel(ym) { return new Date(ym + '-01T00:00:00').toLocaleDateString(undefined, { month: 'long', year: 'numeric' }); }
+function monthLabelShort(ym) { return new Date(ym + '-01T00:00:00').toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); }
+function daysForMonth(ym) { return DAYS.filter(d => monthKey(d.date) === ym); }
+function workoutsForMonth(ym) { return WORKOUTS.filter(w => w.date && monthKey(w.date) === ym); }
+
+let selectedMonth = null;
+
+function renderYearChart() {
+  const months = monthsAvailable();
+  const rows = months.map(ym => {
+    const wk = workoutsForMonth(ym);
+    return { ym, distance_km: wk.reduce((a, w) => a + (w.distance_m || 0), 0) / 1000, count: wk.length };
+  });
+  buildChart(document.getElementById('yearChart'), {
+    rows, xLabel: r => monthLabelShort(r.ym), tickEvery: 1,
+    series: [{ key: 'distance_km', label: 'Distance', color: color('--series-1') }],
+    mode: 'bar', valueFmt: v => v.toFixed(1) + ' km',
+    selectedIndex: months.indexOf(selectedMonth),
+    extraRows: r => [{ label: 'Workouts', color: color('--text-muted'), value: r.count.toString() }],
+    onClick: (row) => selectMonth(row.ym),
+  });
+}
+
+function selectMonth(ym) {
+  selectedMonth = ym;
+  const months = monthsAvailable();
+  const idx = months.indexOf(ym);
+  const days = daysForMonth(ym);
+  const wk = workoutsForMonth(ym);
+  const lbl = monthLabel(ym);
+
+  document.getElementById('monthLabel').textContent = lbl;
+  document.getElementById('prevMonthBtn').disabled = idx <= 0;
+  document.getElementById('nextMonthBtn').disabled = idx >= months.length - 1;
+
+  const rhrLast = lastNonNull(days, 'resting_hr');
+  const stepsAvg = avgOf(days, 'steps');
+  const stressAvg = avgOf(days, 'avg_stress');
+  const totalDistanceKm = wk.reduce((a, w) => a + (w.distance_m || 0), 0) / 1000;
+
+  renderKpiRow(document.getElementById('kpiRow'), [
+    { label: 'Resting heart rate', value: rhrLast ? Math.round(rhrLast.resting_hr) : '—', unit: rhrLast ? 'bpm' : '',
+      sub: rhrLast ? `as of ${fmtDate(rhrLast.date)}` : 'no data this month', sparkPath: sparkPath(days, 'resting_hr', 200, 28) },
+    { label: 'Daily steps', value: stepsAvg ? compact(stepsAvg) : '—', sub: 'monthly average', sparkPath: sparkPath(days, 'steps', 200, 28) },
+    { label: 'Workouts', value: wk.length, sub: `${totalDistanceKm.toFixed(1)} km total` },
+    { label: 'Stress', value: stressAvg ? Math.round(stressAvg) : '—', unit: '/ 100', sub: 'monthly average', sparkPath: sparkPath(days, 'avg_stress', 200, 28) },
+  ]);
+
   buildChart(document.getElementById('rhrChart'), {
-    rows: DAYS, xLabel: r => fmtDateFull(r.date),
+    rows: days, xLabel: r => fmtDateFull(r.date),
     series: [{ key: 'resting_hr', label: 'Resting HR', color: color('--series-1') }],
     mode: 'line', valueFmt: v => Math.round(v) + ' bpm',
   });
   buildChart(document.getElementById('stepsChart'), {
-    rows: DAYS, xLabel: r => fmtDateFull(r.date),
+    rows: days, xLabel: r => fmtDateFull(r.date),
     series: [{ key: 'steps', label: 'Steps', color: color('--series-1') }],
     mode: 'bar', valueFmt: v => Math.round(v).toLocaleString(),
     refLines: [
@@ -592,68 +750,31 @@ function renderOverviewCharts() {
     ],
   });
   buildChart(document.getElementById('stressChart'), {
-    rows: DAYS, xLabel: r => fmtDateFull(r.date),
+    rows: days, xLabel: r => fmtDateFull(r.date),
     series: [
       { key: 'avg_stress', label: 'Average', color: color('--series-1') },
       { key: 'max_stress', label: 'Peak', color: color('--series-2') },
     ],
     mode: 'line', valueFmt: v => Math.round(v).toString(),
   });
+
+  renderWorkoutsTable(wk, lbl);
+  renderYearChart();
 }
-renderOverviewCharts();
 
-// ---------- workouts table ----------
-const TYPE_META = {
-  running: { label: 'Running', color: color('--series-1') },
-  trail_running: { label: 'Trail running', color: color('--series-2') },
-  cycling: { label: 'Cycling', color: color('--series-3') },
-  rowing_v2: { label: 'Rowing', color: color('--series-4') },
-};
-function typeMeta(t) { return TYPE_META[t] || { label: t || 'Other', color: color('--text-muted') }; }
-
-document.getElementById('wkSub').textContent = `${WORKOUTS.length} activities, ${fmtDate(firstDay)}–${fmtDate(lastDay)} — click a row for full detail.`;
-
-const tbody = document.getElementById('wkBody');
-[...WORKOUTS].reverse().forEach(w => {
-  const tr = document.createElement('tr');
-  tr.className = 'clickable';
-  tr.tabIndex = 0;
-  tr.setAttribute('role', 'button');
-  const tm = typeMeta(w.type);
-
-  const tdDate = document.createElement('td'); tdDate.textContent = fmtDate(w.date); tr.appendChild(tdDate);
-  const tdName = document.createElement('td'); tdName.className = 'wk-name'; tdName.textContent = w.name || '—'; tr.appendChild(tdName);
-
-  const tdType = document.createElement('td');
-  const badge = document.createElement('span'); badge.className = 'type-badge';
-  const dot = document.createElement('span'); dot.className = 'type-dot'; dot.style.background = tm.color;
-  const lbl = document.createElement('span'); lbl.textContent = tm.label;
-  badge.appendChild(dot); badge.appendChild(lbl); tdType.appendChild(badge); tr.appendChild(tdType);
-
-  const tdDist = document.createElement('td');
-  tdDist.textContent = w.distance_m != null ? (w.distance_m / 1000).toFixed(1) + ' km' : '—';
-  tr.appendChild(tdDist);
-
-  const tdDur = document.createElement('td'); tdDur.textContent = hms(w.duration_s); tr.appendChild(tdDur);
-  const tdAvgHr = document.createElement('td'); tdAvgHr.textContent = w.avg_hr != null ? Math.round(w.avg_hr) : '—'; tr.appendChild(tdAvgHr);
-  const tdMaxHr = document.createElement('td'); tdMaxHr.textContent = w.max_hr != null ? Math.round(w.max_hr) : '—'; tr.appendChild(tdMaxHr);
-
-  const tdTe = document.createElement('td');
-  const aer = w.aerobic_te != null ? w.aerobic_te.toFixed(1) : '—';
-  const anaer = w.anaerobic_te != null ? w.anaerobic_te.toFixed(1) : '—';
-  tdTe.textContent = `${aer} / ${anaer}`;
-  tr.appendChild(tdTe);
-
-  const go = () => showDetail(w.id);
-  tr.addEventListener('click', go);
-  tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
-
-  tbody.appendChild(tr);
+document.getElementById('prevMonthBtn').addEventListener('click', () => {
+  const months = monthsAvailable();
+  const i = months.indexOf(selectedMonth);
+  if (i > 0) selectMonth(months[i - 1]);
+});
+document.getElementById('nextMonthBtn').addEventListener('click', () => {
+  const months = monthsAvailable();
+  const i = months.indexOf(selectedMonth);
+  if (i < months.length - 1) selectMonth(months[i + 1]);
 });
 
-document.getElementById('note').innerHTML =
-  '<strong>Not shown:</strong> sleep, HRV, body battery, and training readiness — Garmin returned no data for these over this period, most likely because this device doesn\'t track them or wasn\'t worn overnight. ' +
-  'This is a snapshot from the last sync — ask Claude to refresh it any time for current numbers.';
+renderYearChart();
+selectMonth(monthsAvailable()[monthsAvailable().length - 1]);
 
 // ---------- detail view ----------
 const viewOverview = document.getElementById('view-overview');

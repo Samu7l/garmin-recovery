@@ -1,6 +1,6 @@
 """
 Assembles the dashboard HTML from garmin/data.json (wellness + activity
-summaries) and garmin/activity_details/*.json + *_map.png (per-activity GPS
+summaries) and garmin/activity_details/*.json + *_map.jpg (per-activity GPS
 route, HR/pace/elevation/cadence streams, laps), using dashboard_template.html
 as the shell.
 
@@ -85,10 +85,10 @@ def build_activity_details():
         detail = json.loads(json_path.read_text(encoding="utf-8"))
         map_data_uri = None
         if detail.get("has_map"):
-            map_path = DETAIL_DIR / f"{activity_id}_map.png"
+            map_path = DETAIL_DIR / f"{activity_id}_map.jpg"
             if map_path.exists():
                 encoded = base64.b64encode(map_path.read_bytes()).decode("ascii")
-                map_data_uri = f"data:image/png;base64,{encoded}"
+                map_data_uri = f"data:image/jpeg;base64,{encoded}"
         details[activity_id] = {
             "series": detail.get("series"),
             "laps": detail.get("laps") or [],

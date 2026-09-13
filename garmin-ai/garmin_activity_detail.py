@@ -4,7 +4,7 @@ Fetches GPS track, heart rate / speed / elevation / cadence streams, and lap
 renders a real-map image with the pace-colored route drawn on it.
 
 Read-only against Garmin. Each activity is cached forever once fetched
-(garmin/activity_details/<id>.json + <id>_map.png) since a completed
+(garmin/activity_details/<id>.json + <id>_map.jpg) since a completed
 activity's data never changes - re-running only fetches new activities.
 """
 
@@ -146,7 +146,7 @@ def downsample_route(gps_points, max_points=ROUTE_MAX_POINTS):
 
 def process_activity(client, activity_id, activity_type):
     detail_json_path = DETAIL_DIR / f"{activity_id}.json"
-    map_path = DETAIL_DIR / f"{activity_id}_map.png"
+    map_path = DETAIL_DIR / f"{activity_id}_map.jpg"
     if detail_json_path.exists():
         return "cached"
 
