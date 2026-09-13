@@ -1,0 +1,766 @@
+<title>Garmin Recovery</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --series-1:       #2a78d6;
+    --series-2:       #eb6834;
+    --series-3:       #1baf7a;
+    --series-4:       #eda100;
+    --border:         rgba(11,11,11,0.10);
+    --series-1-wash:  rgba(42,120,214,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --series-4:       #c98500;
+      --border:         rgba(255,255,255,0.10);
+      --series-1-wash:  rgba(57,135,229,0.14);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --series-4:       #c98500;
+    --border:         rgba(255,255,255,0.10);
+    --series-1-wash:  rgba(57,135,229,0.14);
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--page-plane); }
+  .viz-root {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+  h1 { font-size: 22px; font-weight: 650; margin: 0 0 2px; }
+  .subhead { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 24px; }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 720px) {
+    .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .tile .value { font-size: 26px; font-weight: 600; line-height: 1.1; }
+  .tile .value .unit { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-left: 4px; }
+  .tile .sub { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+  .tile svg.spark { display: block; margin-top: 6px; width: 100%; height: 28px; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px 8px;
+    margin-bottom: 20px;
+  }
+  .card h2 { font-size: 14.5px; font-weight: 620; margin: 0 0 2px; }
+  .card .card-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; flex-wrap: wrap; }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch-line { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
+
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .axis-label { fill: var(--text-muted); font-size: 10.5px; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 80ms ease;
+    max-width: 220px;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .t-date { color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+  .tooltip .t-key { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+  .tooltip .t-swatch { width: 10px; height: 2px; border-radius: 1px; flex: none; }
+  .tooltip .t-val { font-weight: 650; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data-table th {
+    text-align: left; font-weight: 600; color: var(--text-muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em;
+    padding: 8px 10px; border-bottom: 1px solid var(--gridline);
+  }
+  table.data-table td {
+    padding: 9px 10px; border-bottom: 1px solid var(--gridline);
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+  }
+  table.data-table tbody tr:hover { background: var(--series-1-wash); }
+  .type-badge { display: inline-flex; align-items: center; gap: 6px; }
+  .type-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .wk-name { font-variant-numeric: normal; }
+  .table-scroll { overflow-x: auto; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:focus-visible { outline: 2px solid var(--series-1); outline-offset: -2px; }
+
+  .note {
+    font-size: 12px; color: var(--text-muted); line-height: 1.6;
+    border-top: 1px solid var(--gridline); margin-top: 8px; padding-top: 14px;
+  }
+  .note strong { color: var(--text-secondary); }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text-secondary); background: none; border: none;
+    cursor: pointer; padding: 6px 0; margin-bottom: 10px; font-family: inherit;
+  }
+  .back-link:hover { color: var(--text-primary); }
+  .activity-header { margin-bottom: 16px; }
+  .activity-header h1 { margin-bottom: 4px; }
+  .activity-meta { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
+  .garmin-link { color: var(--series-1); text-decoration: none; margin-left: auto; }
+  .garmin-link:hover { text-decoration: underline; }
+  .map-card { padding: 0; overflow: hidden; }
+  .map-card img { display: block; width: 100%; height: auto; }
+  .no-map-note { padding: 16px 18px; font-size: 12.5px; color: var(--text-muted); }
+</style>
+
+<div class="viz-root" id="app">
+
+  <div id="view-overview">
+    <h1>Garmin Recovery</h1>
+    <p class="subhead" id="subhead"></p>
+
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="card">
+      <h2>Resting heart rate</h2>
+      <div class="card-sub">Last 30 days</div>
+      <div class="chart-wrap"><svg id="rhrChart" viewBox="0 0 800 220"></svg></div>
+    </div>
+
+    <div class="card">
+      <h2>Daily steps</h2>
+      <div class="card-sub">Last 30 days</div>
+      <div class="chart-wrap"><svg id="stepsChart" viewBox="0 0 800 220"></svg></div>
+    </div>
+
+    <div class="card">
+      <h2>Stress</h2>
+      <div class="card-sub">Average and peak, 0&ndash;100 scale</div>
+      <div class="legend">
+        <span class="key"><span class="swatch-line" style="background:var(--series-1)"></span>Average</span>
+        <span class="key"><span class="swatch-line" style="background:var(--series-2)"></span>Peak</span>
+      </div>
+      <div class="chart-wrap"><svg id="stressChart" viewBox="0 0 800 220"></svg></div>
+    </div>
+
+    <div class="card">
+      <h2>Workouts</h2>
+      <div class="card-sub" id="wkSub">Click a row for full activity detail — route, pace, heart rate, laps.</div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Activity</th><th>Type</th><th>Distance</th>
+              <th>Duration</th><th>Avg&nbsp;HR</th><th>Max&nbsp;HR</th><th>Training effect</th>
+            </tr>
+          </thead>
+          <tbody id="wkBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="note" id="note"></p>
+  </div>
+
+  <div id="view-detail" hidden>
+    <button class="back-link" id="backBtn">&larr; Back to overview</button>
+    <div class="activity-header">
+      <h1 id="detailTitle"></h1>
+      <div class="activity-meta">
+        <span class="type-badge"><span class="type-dot" id="detailTypeDot"></span><span id="detailTypeLabel"></span></span>
+        <span id="detailDate"></span>
+        <a id="garminLink" class="garmin-link" href="#" target="_blank" rel="noopener">Open on Garmin Connect &#8599;</a>
+      </div>
+    </div>
+
+    <div class="kpi-row" id="detailKpiRow"></div>
+
+    <div class="card map-card" id="mapCard">
+      <img id="mapImg" alt="Route map">
+    </div>
+    <div class="card no-map-note" id="noMapCard" hidden>No GPS track available for this activity.</div>
+
+    <div class="card" id="hrCard">
+      <h2>Heart rate</h2>
+      <div class="card-sub">vs distance</div>
+      <div class="chart-wrap"><svg id="detailHrChart" viewBox="0 0 800 200"></svg></div>
+    </div>
+
+    <div class="card" id="paceCard">
+      <h2 id="paceCardTitle">Pace</h2>
+      <div class="card-sub">vs distance</div>
+      <div class="chart-wrap"><svg id="detailPaceChart" viewBox="0 0 800 200"></svg></div>
+    </div>
+
+    <div class="card" id="elevCard">
+      <h2>Elevation</h2>
+      <div class="card-sub">vs distance</div>
+      <div class="chart-wrap"><svg id="detailElevChart" viewBox="0 0 800 200"></svg></div>
+    </div>
+
+    <div class="card" id="cadenceCard">
+      <h2>Cadence</h2>
+      <div class="card-sub">vs distance</div>
+      <div class="chart-wrap"><svg id="detailCadenceChart" viewBox="0 0 800 200"></svg></div>
+    </div>
+
+    <div class="card" id="lapsCard">
+      <h2>Laps</h2>
+      <div class="card-sub" id="lapsSub"></div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr><th>Lap</th><th>Distance</th><th>Duration</th><th id="lapsPaceHeader">Avg pace</th><th>Elev&nbsp;gain</th><th>Avg&nbsp;HR</th><th>Avg&nbsp;cadence</th></tr>
+          </thead>
+          <tbody id="lapsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DAYS = __DAYS_JSON__;
+const WORKOUTS = __WORKOUTS_JSON__;
+const ACTIVITY_DETAILS = __ACTIVITY_DETAILS_JSON__;
+
+const root = document.getElementById('app');
+const cs = getComputedStyle(root);
+const color = (name) => cs.getPropertyValue(name).trim();
+
+function fmtDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function fmtDateFull(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function compact(n) {
+  if (n == null) return '—';
+  return Math.round(n).toLocaleString();
+}
+function hms(seconds) {
+  if (seconds == null) return '—';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}h ${String(m).padStart(2,'0')}m`;
+  return `${m}m ${String(s).padStart(2,'0')}s`;
+}
+function isRunningType(type) { return !!type && type.includes('running'); }
+function paceOrSpeedValue(speedMps, type) {
+  if (speedMps == null || speedMps <= 0.1) return null;
+  return isRunningType(type) ? (1000 / speedMps) / 60 : speedMps * 3.6;
+}
+function formatPaceOrSpeed(speedMps, type) {
+  if (speedMps == null || speedMps <= 0.1) return '—';
+  if (isRunningType(type)) {
+    const p = (1000 / speedMps) / 60;
+    const m = Math.floor(p);
+    const s = Math.round((p - m) * 60);
+    return `${m}:${String(s).padStart(2, '0')} /km`;
+  }
+  return `${(speedMps * 3.6).toFixed(1)} km/h`;
+}
+
+const lastDay = DAYS[DAYS.length - 1].date;
+const firstDay = DAYS[0].date;
+document.getElementById('subhead').textContent =
+  `Steps, resting heart rate, stress, and workouts pulled from Garmin Connect — ${fmtDate(firstDay)} to ${fmtDate(lastDay)}.`;
+
+// ---------- KPI tiles (overview) ----------
+function lastNonNull(key) {
+  for (let i = DAYS.length - 1; i >= 0; i--) {
+    if (DAYS[i][key] != null) return DAYS[i];
+  }
+  return null;
+}
+function avgOf(key) {
+  const vals = DAYS.map(d => d[key]).filter(v => v != null);
+  if (!vals.length) return null;
+  return vals.reduce((a,b) => a+b, 0) / vals.length;
+}
+function sparkPath(key, w, h) {
+  const vals = DAYS.map(d => d[key]);
+  const present = vals.map((v,i) => v != null ? i : null).filter(i => i !== null);
+  if (present.length < 2) return '';
+  const min = Math.min(...present.map(i => vals[i]));
+  const max = Math.max(...present.map(i => vals[i]));
+  const span = (max - min) || 1;
+  const x = i => (i / (vals.length - 1)) * w;
+  const y = v => h - ((v - min) / span) * (h - 4) - 2;
+  let d = '';
+  let started = false;
+  vals.forEach((v, i) => {
+    if (v == null) { started = false; return; }
+    d += (started ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1) + ' ';
+    started = true;
+  });
+  return d.trim();
+}
+
+function renderKpiRow(container, kpis) {
+  container.innerHTML = '';
+  kpis.forEach(k => {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.innerHTML = `
+      <div class="label"></div>
+      <div class="value"><span class="v"></span><span class="unit"></span></div>
+      <div class="sub"></div>
+    `;
+    tile.querySelector('.label').textContent = k.label;
+    tile.querySelector('.v').textContent = k.value;
+    tile.querySelector('.unit').textContent = k.unit || '';
+    tile.querySelector('.sub').textContent = k.sub || '';
+    if (k.sparkPath) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'spark');
+      svg.setAttribute('viewBox', '0 0 200 28');
+      svg.setAttribute('preserveAspectRatio', 'none');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', k.sparkPath);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', color('--series-1'));
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(path);
+      tile.appendChild(svg);
+    }
+    container.appendChild(tile);
+  });
+}
+
+const rhrLast = lastNonNull('resting_hr');
+const stepsAvg = avgOf('steps');
+const stressAvg = avgOf('avg_stress');
+const totalDistanceKm = WORKOUTS.reduce((a,w) => a + (w.distance_m || 0), 0) / 1000;
+
+renderKpiRow(document.getElementById('kpiRow'), [
+  { label: 'Resting heart rate', value: rhrLast ? Math.round(rhrLast.resting_hr) : '—', unit: rhrLast ? 'bpm' : '',
+    sub: rhrLast ? `as of ${fmtDate(rhrLast.date)}` : 'no recent data', sparkPath: sparkPath('resting_hr', 200, 28) },
+  { label: 'Daily steps', value: stepsAvg ? compact(stepsAvg) : '—', sub: '30-day average', sparkPath: sparkPath('steps', 200, 28) },
+  { label: 'Workouts', value: WORKOUTS.length, sub: `${totalDistanceKm.toFixed(1)} km total` },
+  { label: 'Stress', value: stressAvg ? Math.round(stressAvg) : '—', unit: '/ 100', sub: '30-day average', sparkPath: sparkPath('avg_stress', 200, 28) },
+]);
+
+// ---------- shared tooltip ----------
+const tooltipEl = document.getElementById('tooltip');
+function showTooltip(x, y, rows, xLabel) {
+  tooltipEl.innerHTML = '';
+  const dateEl = document.createElement('div');
+  dateEl.className = 't-date';
+  dateEl.textContent = xLabel;
+  tooltipEl.appendChild(dateEl);
+  rows.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 't-row';
+    const key = document.createElement('div');
+    key.className = 't-key';
+    const sw = document.createElement('span');
+    sw.className = 't-swatch';
+    sw.style.background = r.color;
+    key.appendChild(sw);
+    const label = document.createElement('span');
+    label.textContent = r.label;
+    key.appendChild(label);
+    row.appendChild(key);
+    const val = document.createElement('div');
+    val.className = 't-val';
+    val.textContent = r.value;
+    row.appendChild(val);
+    tooltipEl.appendChild(row);
+  });
+  tooltipEl.style.left = Math.min(x + 14, window.innerWidth - 240) + 'px';
+  tooltipEl.style.top = Math.max(y - 10, 8) + 'px';
+  tooltipEl.classList.add('show');
+}
+function hideTooltip() { tooltipEl.classList.remove('show'); }
+
+// ---------- generic chart builder ----------
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+// opts: { rows, xKey, xLabel(row)->string, series: [{key,label,color}], mode: 'line'|'bar', unit, valueFmt(v)->string }
+function buildChart(svg, opts) {
+  const W = 800, H = svg.viewBox.baseVal.height || 220;
+  const padL = 40, padR = 12, padT = 12, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  svg.innerHTML = '';
+
+  const rows = opts.rows;
+  const n = rows.length;
+  const valueFmt = opts.valueFmt || (v => Math.round(v).toLocaleString() + (opts.unit ? ' ' + opts.unit : ''));
+  if (!n) return;
+
+  const allVals = [];
+  opts.series.forEach(s => rows.forEach(r => { if (r[s.key] != null) allVals.push(r[s.key]); }));
+  let maxV = allVals.length ? Math.max(...allVals) : 1;
+  let minV = opts.mode === 'bar' ? 0 : (allVals.length ? Math.min(...allVals) : 0);
+  if (opts.mode !== 'bar') {
+    const span = maxV - minV || 1;
+    minV -= span * 0.08;
+    maxV += span * 0.08;
+  } else {
+    maxV = maxV * 1.12 || 1;
+  }
+  const x = i => padL + (i / (n - 1 || 1)) * plotW;
+  const bandW = plotW / n;
+  const xBand = i => padL + i * bandW + bandW / 2;
+  const y = v => padT + plotH - ((v - minV) / (maxV - minV || 1)) * plotH;
+
+  const steps = 4;
+  for (let s = 0; s <= steps; s++) {
+    const v = minV + (s / steps) * (maxV - minV);
+    const gy = y(v);
+    svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, class: 'gridline' }));
+    const label = el('text', { x: padL - 8, y: gy + 3, class: 'axis-label', 'text-anchor': 'end' });
+    label.textContent = Math.round(v).toLocaleString();
+    svg.appendChild(label);
+  }
+  svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH, class: 'baseline' }));
+
+  const tickEvery = Math.max(1, Math.round(n / 6));
+  for (let i = 0; i < n; i += tickEvery) {
+    const lx = opts.mode === 'bar' ? xBand(i) : x(i);
+    const label = el('text', { x: lx, y: H - 8, class: 'axis-label', 'text-anchor': 'middle' });
+    label.textContent = opts.xLabel(rows[i]);
+    svg.appendChild(label);
+  }
+
+  if (opts.mode === 'bar') {
+    const s = opts.series[0];
+    const barW = Math.min(24, bandW * 0.6);
+    rows.forEach((row, i) => {
+      const v = row[s.key];
+      if (v == null) return;
+      const bx = xBand(i) - barW / 2;
+      const by = y(v);
+      svg.appendChild(el('rect', { x: bx, y: by, width: barW, height: (padT + plotH) - by, rx: 4, ry: 4, fill: s.color }));
+    });
+  } else {
+    opts.series.forEach(s => {
+      let d = '';
+      let started = false;
+      rows.forEach((row, i) => {
+        const v = row[s.key];
+        if (v == null) { started = false; return; }
+        d += (started ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1) + ' ';
+        started = true;
+      });
+      svg.appendChild(el('path', { d: d.trim(), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+      for (let i = n - 1; i >= 0; i--) {
+        if (rows[i][s.key] != null) {
+          svg.appendChild(el('circle', { cx: x(i), cy: y(rows[i][s.key]), r: 4, fill: s.color, stroke: color('--surface-1'), 'stroke-width': 2 }));
+          break;
+        }
+      }
+    });
+  }
+
+  const crosshair = el('line', { x1: 0, x2: 0, y1: padT, y2: padT + plotH, stroke: color('--baseline'), 'stroke-width': 1, opacity: 0 });
+  svg.appendChild(crosshair);
+  const dots = opts.series.map(s => {
+    const c = el('circle', { r: 4.5, fill: s.color, stroke: color('--surface-1'), 'stroke-width': 2, opacity: 0 });
+    svg.appendChild(c);
+    return c;
+  });
+
+  const hit = el('rect', { x: padL, y: padT, width: plotW, height: plotH, fill: 'transparent' });
+  svg.appendChild(hit);
+
+  function handleMove(evt) {
+    const rect = svg.getBoundingClientRect();
+    const px = (evt.clientX - rect.left) / rect.width * W;
+    let i = opts.mode === 'bar'
+      ? Math.min(n - 1, Math.max(0, Math.floor((px - padL) / bandW)))
+      : Math.round(((px - padL) / plotW) * (n - 1));
+    i = Math.min(n - 1, Math.max(0, i));
+    const row = rows[i];
+    const cx = opts.mode === 'bar' ? xBand(i) : x(i);
+    crosshair.setAttribute('x1', cx); crosshair.setAttribute('x2', cx);
+    crosshair.setAttribute('opacity', 1);
+    const trows = [];
+    opts.series.forEach((s, si) => {
+      const v = row[s.key];
+      if (v != null) {
+        dots[si].setAttribute('cx', cx); dots[si].setAttribute('cy', y(v)); dots[si].setAttribute('opacity', 1);
+        trows.push({ label: s.label, color: s.color, value: valueFmt(v) });
+      } else {
+        dots[si].setAttribute('opacity', 0);
+      }
+    });
+    if (trows.length) showTooltip(evt.clientX, evt.clientY, trows, opts.xLabel(row));
+    else hideTooltip();
+  }
+  function handleLeave() {
+    crosshair.setAttribute('opacity', 0);
+    dots.forEach(d => d.setAttribute('opacity', 0));
+    hideTooltip();
+  }
+  hit.addEventListener('pointermove', handleMove);
+  hit.addEventListener('pointerleave', handleLeave);
+}
+
+function renderOverviewCharts() {
+  buildChart(document.getElementById('rhrChart'), {
+    rows: DAYS, xLabel: r => fmtDateFull(r.date),
+    series: [{ key: 'resting_hr', label: 'Resting HR', color: color('--series-1') }],
+    mode: 'line', valueFmt: v => Math.round(v) + ' bpm',
+  });
+  buildChart(document.getElementById('stepsChart'), {
+    rows: DAYS, xLabel: r => fmtDateFull(r.date),
+    series: [{ key: 'steps', label: 'Steps', color: color('--series-1') }],
+    mode: 'bar', valueFmt: v => Math.round(v).toLocaleString(),
+  });
+  buildChart(document.getElementById('stressChart'), {
+    rows: DAYS, xLabel: r => fmtDateFull(r.date),
+    series: [
+      { key: 'avg_stress', label: 'Average', color: color('--series-1') },
+      { key: 'max_stress', label: 'Peak', color: color('--series-2') },
+    ],
+    mode: 'line', valueFmt: v => Math.round(v).toString(),
+  });
+}
+renderOverviewCharts();
+
+// ---------- workouts table ----------
+const TYPE_META = {
+  running: { label: 'Running', color: color('--series-1') },
+  trail_running: { label: 'Trail running', color: color('--series-2') },
+  cycling: { label: 'Cycling', color: color('--series-3') },
+  rowing_v2: { label: 'Rowing', color: color('--series-4') },
+};
+function typeMeta(t) { return TYPE_META[t] || { label: t || 'Other', color: color('--text-muted') }; }
+
+document.getElementById('wkSub').textContent = `${WORKOUTS.length} activities, ${fmtDate(firstDay)}–${fmtDate(lastDay)} — click a row for full detail.`;
+
+const tbody = document.getElementById('wkBody');
+[...WORKOUTS].reverse().forEach(w => {
+  const tr = document.createElement('tr');
+  tr.className = 'clickable';
+  tr.tabIndex = 0;
+  tr.setAttribute('role', 'button');
+  const tm = typeMeta(w.type);
+
+  const tdDate = document.createElement('td'); tdDate.textContent = fmtDate(w.date); tr.appendChild(tdDate);
+  const tdName = document.createElement('td'); tdName.className = 'wk-name'; tdName.textContent = w.name || '—'; tr.appendChild(tdName);
+
+  const tdType = document.createElement('td');
+  const badge = document.createElement('span'); badge.className = 'type-badge';
+  const dot = document.createElement('span'); dot.className = 'type-dot'; dot.style.background = tm.color;
+  const lbl = document.createElement('span'); lbl.textContent = tm.label;
+  badge.appendChild(dot); badge.appendChild(lbl); tdType.appendChild(badge); tr.appendChild(tdType);
+
+  const tdDist = document.createElement('td');
+  tdDist.textContent = w.distance_m != null ? (w.distance_m / 1000).toFixed(1) + ' km' : '—';
+  tr.appendChild(tdDist);
+
+  const tdDur = document.createElement('td'); tdDur.textContent = hms(w.duration_s); tr.appendChild(tdDur);
+  const tdAvgHr = document.createElement('td'); tdAvgHr.textContent = w.avg_hr != null ? Math.round(w.avg_hr) : '—'; tr.appendChild(tdAvgHr);
+  const tdMaxHr = document.createElement('td'); tdMaxHr.textContent = w.max_hr != null ? Math.round(w.max_hr) : '—'; tr.appendChild(tdMaxHr);
+
+  const tdTe = document.createElement('td');
+  const aer = w.aerobic_te != null ? w.aerobic_te.toFixed(1) : '—';
+  const anaer = w.anaerobic_te != null ? w.anaerobic_te.toFixed(1) : '—';
+  tdTe.textContent = `${aer} / ${anaer}`;
+  tr.appendChild(tdTe);
+
+  const go = () => showDetail(w.id);
+  tr.addEventListener('click', go);
+  tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+
+  tbody.appendChild(tr);
+});
+
+document.getElementById('note').innerHTML =
+  '<strong>Not shown:</strong> sleep, HRV, body battery, and training readiness — Garmin returned no data for these over this period, most likely because this device doesn\'t track them or wasn\'t worn overnight. ' +
+  'This is a snapshot from the last sync — ask Claude to refresh it any time for current numbers.';
+
+// ---------- detail view ----------
+const viewOverview = document.getElementById('view-overview');
+const viewDetail = document.getElementById('view-detail');
+
+function showOverview() {
+  viewDetail.hidden = true;
+  viewOverview.hidden = false;
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
+function showDetail(id) {
+  const w = WORKOUTS.find(w => w.id === id);
+  const d = ACTIVITY_DETAILS[id];
+  if (!w) return;
+  const tm = typeMeta(w.type);
+  const running = isRunningType(w.type);
+
+  document.getElementById('detailTitle').textContent = w.name || 'Activity';
+  document.getElementById('detailTypeDot').style.background = tm.color;
+  document.getElementById('detailTypeLabel').textContent = tm.label;
+  document.getElementById('detailDate').textContent = w.start ? w.start.replace(' ', ' · ') : fmtDate(w.date);
+  document.getElementById('garminLink').href = `https://connect.garmin.com/modern/activity/${id}`;
+
+  renderKpiRow(document.getElementById('detailKpiRow'), [
+    { label: 'Distance', value: w.distance_m != null ? (w.distance_m / 1000).toFixed(2) : '—', unit: 'km' },
+    { label: 'Duration', value: hms(w.duration_s) },
+    { label: running ? 'Avg pace' : 'Avg speed', value: formatPaceOrSpeed(w.distance_m && w.duration_s ? w.distance_m / w.duration_s : null, w.type) },
+    { label: 'Avg / Max HR', value: `${w.avg_hr != null ? Math.round(w.avg_hr) : '—'} / ${w.max_hr != null ? Math.round(w.max_hr) : '—'}`, unit: 'bpm' },
+  ]);
+
+  const mapCard = document.getElementById('mapCard');
+  const noMapCard = document.getElementById('noMapCard');
+  if (d && d.has_map && d.map_data_uri) {
+    mapCard.hidden = false; noMapCard.hidden = true;
+    document.getElementById('mapImg').src = d.map_data_uri;
+  } else {
+    mapCard.hidden = true; noMapCard.hidden = false;
+  }
+
+  const series = (d && d.series) || { distance_km: [] };
+  const rows = series.distance_km.map((dk, i) => ({
+    distance_km: dk,
+    hr: series.hr[i],
+    pace_val: paceOrSpeedValue(series.speed_mps[i], w.type),
+    elevation_m: series.elevation_m[i],
+    cadence: series.cadence[i],
+  }));
+  const xLabel = r => `${r.distance_km.toFixed(1)} km`;
+
+  const hasAny = (key) => rows.some(r => r[key] != null);
+
+  document.getElementById('hrCard').hidden = !hasAny('hr');
+  if (hasAny('hr')) {
+    buildChart(document.getElementById('detailHrChart'), {
+      rows, xLabel, series: [{ key: 'hr', label: 'Heart rate', color: color('--series-1') }],
+      mode: 'line', valueFmt: v => Math.round(v) + ' bpm',
+    });
+  }
+
+  document.getElementById('paceCardTitle').textContent = running ? 'Pace' : 'Speed';
+  document.getElementById('paceCard').hidden = !hasAny('pace_val');
+  if (hasAny('pace_val')) {
+    buildChart(document.getElementById('detailPaceChart'), {
+      rows, xLabel, series: [{ key: 'pace_val', label: running ? 'Pace' : 'Speed', color: color('--series-2') }],
+      mode: 'line', valueFmt: v => running ? formatPaceOrSpeed((1000 / (v * 60)), w.type) : `${v.toFixed(1)} km/h`,
+    });
+  }
+
+  document.getElementById('elevCard').hidden = !hasAny('elevation_m');
+  if (hasAny('elevation_m')) {
+    buildChart(document.getElementById('detailElevChart'), {
+      rows, xLabel, series: [{ key: 'elevation_m', label: 'Elevation', color: color('--series-3') }],
+      mode: 'line', valueFmt: v => Math.round(v) + ' m',
+    });
+  }
+
+  document.getElementById('cadenceCard').hidden = !hasAny('cadence');
+  if (hasAny('cadence')) {
+    buildChart(document.getElementById('detailCadenceChart'), {
+      rows, xLabel, series: [{ key: 'cadence', label: 'Cadence', color: color('--series-4') }],
+      mode: 'line', valueFmt: v => Math.round(v) + ' spm',
+    });
+  }
+
+  const laps = (d && d.laps) || [];
+  const lapsCard = document.getElementById('lapsCard');
+  lapsCard.hidden = laps.length === 0;
+  document.getElementById('lapsPaceHeader').textContent = running ? 'Avg pace' : 'Avg speed';
+  document.getElementById('lapsSub').textContent = `${laps.length} laps recorded on the watch`;
+  const lapsBody = document.getElementById('lapsBody');
+  lapsBody.innerHTML = '';
+  laps.forEach(lap => {
+    const tr = document.createElement('tr');
+    const cells = [
+      lap.index,
+      lap.distance_m != null ? (lap.distance_m / 1000).toFixed(2) + ' km' : '—',
+      hms(lap.duration_s),
+      formatPaceOrSpeed(lap.avg_speed_mps, w.type),
+      lap.elevation_gain != null ? Math.round(lap.elevation_gain) + ' m' : '—',
+      lap.avg_hr != null ? Math.round(lap.avg_hr) : '—',
+      lap.avg_cadence != null ? Math.round(lap.avg_cadence) : '—',
+    ];
+    cells.forEach(txt => { const td = document.createElement('td'); td.textContent = txt; tr.appendChild(td); });
+    lapsBody.appendChild(tr);
+  });
+
+  viewOverview.hidden = true;
+  viewDetail.hidden = false;
+  window.scrollTo(0, 0);
+  history.replaceState(null, '', '#activity-' + id);
+}
+
+document.getElementById('backBtn').addEventListener('click', showOverview);
+
+function syncFromHash() {
+  const m = location.hash.match(/^#activity-(.+)$/);
+  if (m && WORKOUTS.some(w => w.id === m[1])) {
+    showDetail(m[1]);
+  } else {
+    showOverview();
+  }
+}
+window.addEventListener('hashchange', syncFromHash);
+syncFromHash();
+</script>

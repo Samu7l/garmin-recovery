@@ -1,0 +1,9 @@
+# Private Garmin data and credentials - never public
+garmin-ai/.garmintokens/
+garmin-ai/.tilecache/
+garmin-ai/sync.log
+garmin-ai/garmin/
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,4 @@
+garminconnect
+curl_cffi
+Pillow
+requests
