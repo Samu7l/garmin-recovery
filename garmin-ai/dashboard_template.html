@@ -914,7 +914,12 @@ function showDetail(id) {
       lap.avg_hr != null ? Math.round(lap.avg_hr) : '—',
       lap.avg_cadence != null ? Math.round(lap.avg_cadence) : '—',
     ];
-    cells.forEach(txt => { const td = document.createElement('td'); td.textContent = txt; tr.appendChild(td); });
+    cells.forEach((txt, ci) => {
+      const td = document.createElement('td');
+      td.textContent = txt;
+      if (ci === 3) td.style.fontWeight = '700';
+      tr.appendChild(td);
+    });
     if (lap.avg_speed_mps != null) {
       const t = (lap.avg_speed_mps - lapSpeedMin) / ((lapSpeedMax - lapSpeedMin) || 1);
       const rgb = lapSpeedColor(t);
