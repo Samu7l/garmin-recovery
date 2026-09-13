@@ -64,16 +64,6 @@
   .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px 8px; margin-bottom: 20px; }
   .card h2 { font-size: 14.5px; font-weight: 620; margin: 0 0 2px; }
   .card .card-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
-  .card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .card-header-row h2 { flex: none; }
-  .chart-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex: none; }
-  .toggle-btn {
-    font-family: inherit; font-size: 11.5px; color: var(--text-secondary); background: var(--surface-1);
-    border: none; padding: 5px 10px; cursor: pointer;
-  }
-  .toggle-btn + .toggle-btn { border-left: 1px solid var(--border); }
-  .toggle-btn.active { background: var(--series-1); color: #fff; }
-  .toggle-btn:hover:not(.active) { background: var(--series-1-wash); }
   .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; flex-wrap: wrap; }
   .legend .key { display: inline-flex; align-items: center; gap: 6px; }
   .legend .swatch-line { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
@@ -207,15 +197,9 @@
     </div>
 
     <div class="card" id="paceCard">
-      <div class="card-header-row">
-        <h2 id="paceCardTitle">Pace</h2>
-        <div class="chart-toggle" id="paceToggle" hidden>
-          <button class="toggle-btn active" data-mode="distance">By distance</button>
-          <button class="toggle-btn" data-mode="laps">By lap</button>
-        </div>
-      </div>
-      <div class="card-sub" id="paceCardSub">vs distance</div>
-      <div class="chart-wrap"><svg id="detailPaceChart" viewBox="0 0 800 200"></svg></div>
+      <h2 id="paceCardTitle">Pace</h2>
+      <div class="card-sub">vs distance, with elevation for context</div>
+      <div class="chart-wrap"><svg id="detailPaceChart" viewBox="0 0 800 220"></svg></div>
     </div>
 
     <div class="card" id="elevCard">
@@ -276,10 +260,6 @@ function hms(seconds) {
   return `${m}m ${String(s).padStart(2,'0')}s`;
 }
 function isRunningType(type) { return !!type && type.includes('running'); }
-function paceOrSpeedValue(speedMps, type) {
-  if (speedMps == null || speedMps <= 0.1) return null;
-  return isRunningType(type) ? (1000 / speedMps) / 60 : speedMps * 3.6;
-}
 function formatPaceOrSpeed(speedMps, type) {
   if (speedMps == null || speedMps <= 0.1) return '—';
   if (isRunningType(type)) {
@@ -672,42 +652,162 @@ function renderRouteMap(route) {
   map.fitBounds(bounds, { padding: [20, 20] });
 }
 
-let paceMode = 'distance';
-let paceCtx = null;
-
-function renderPaceChart() {
-  if (!paceCtx) return;
-  const { rows, xLabel, laps, running, type } = paceCtx;
-  const label = running ? 'Pace' : 'Speed';
-  const valueFmt = v => running ? formatPaceOrSpeed((1000 / (v * 60)), type) : `${v.toFixed(1)} km/h`;
-  const svg = document.getElementById('detailPaceChart');
-  const sub = document.getElementById('paceCardSub');
-
-  if (paceMode === 'laps') {
-    sub.textContent = 'Average per lap';
-    const lapRows = laps.map(lap => ({ lap_label: 'Lap ' + lap.index, pace_val: paceOrSpeedValue(lap.avg_speed_mps, type) }));
-    const has = lapRows.some(r => r.pace_val != null);
-    document.getElementById('paceCard').hidden = !has;
-    if (has) {
-      buildChart(svg, { rows: lapRows, xLabel: r => r.lap_label, series: [{ key: 'pace_val', label, color: color('--series-2') }], mode: 'bar', valueFmt });
-    }
-  } else {
-    sub.textContent = 'vs distance';
-    const has = rows.some(r => r.pace_val != null);
-    document.getElementById('paceCard').hidden = !has;
-    if (has) {
-      buildChart(svg, { rows, xLabel, series: [{ key: 'pace_val', label, color: color('--series-2') }], mode: 'line', valueFmt });
-    }
-  }
+function fmtPaceSeconds(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+function paceAxisValue(speedMps, running) {
+  if (speedMps == null || speedMps <= 0.1) return null;
+  return running ? (1000 / speedMps) : speedMps * 3.6;
 }
 
-document.querySelectorAll('#paceToggle .toggle-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    paceMode = btn.dataset.mode;
-    document.querySelectorAll('#paceToggle .toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
-    renderPaceChart();
-  });
-});
+// White (slow) -> red (fast), normalized per-activity across that activity's own laps.
+function lapSpeedColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  const c0 = [255, 255, 255], c1 = [211, 43, 43];
+  return c0.map((v, i) => Math.round(v + (c1[i] - v) * t));
+}
+function textColorFor(rgb) {
+  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return luminance > 0.55 ? '#0b0b0b' : '#ffffff';
+}
+
+// Combined pace (or speed) + elevation chart: elevation as a muted background
+// area on its own left scale, pace/speed as the foreground line on the right
+// scale. For running, the right scale is inverted (faster = higher on the
+// chart) since lower seconds-per-km is the better result.
+function buildPaceElevationChart(svg, opts) {
+  const W = 800, H = svg.viewBox.baseVal.height || 220;
+  const padL = 46, padR = 46, padT = 12, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  svg.innerHTML = '';
+
+  const rows = opts.rows;
+  const n = rows.length;
+  if (!n) return;
+
+  const elevVals = rows.map(r => r.elevation_m).filter(v => v != null);
+  const paceVals = rows.map(r => r.pace_axis_val).filter(v => v != null);
+  if (!elevVals.length && !paceVals.length) return;
+
+  let elevMin = elevVals.length ? Math.min(...elevVals) : 0;
+  let elevMax = elevVals.length ? Math.max(...elevVals) : 1;
+  const elevSpan = (elevMax - elevMin) || 1;
+  elevMin -= elevSpan * 0.1; elevMax += elevSpan * 0.2;
+
+  let paceMin = paceVals.length ? Math.min(...paceVals) : 0;
+  let paceMax = paceVals.length ? Math.max(...paceVals) : 1;
+  const paceSpan = (paceMax - paceMin) || 1;
+  paceMin -= paceSpan * 0.1; paceMax += paceSpan * 0.1;
+
+  const x = i => padL + (i / (n - 1 || 1)) * plotW;
+  const yElev = v => padT + plotH - ((v - elevMin) / (elevMax - elevMin || 1)) * plotH;
+  const yPace = opts.running
+    ? (v => padT + ((v - paceMin) / (paceMax - paceMin || 1)) * plotH)
+    : (v => padT + plotH - ((v - paceMin) / (paceMax - paceMin || 1)) * plotH);
+  const fmtPaceAxis = v => opts.running ? fmtPaceSeconds(v) : v.toFixed(0);
+
+  const steps = 4;
+  for (let s = 0; s <= steps; s++) {
+    const f = s / steps;
+    const gy = padT + f * plotH;
+    svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, class: 'gridline' }));
+    if (elevVals.length) {
+      const ev = elevMax - f * (elevMax - elevMin);
+      const lbl = el('text', { x: padL - 8, y: gy + 3, class: 'axis-label', 'text-anchor': 'end' });
+      lbl.textContent = Math.round(ev) + ' m';
+      svg.appendChild(lbl);
+    }
+    if (paceVals.length) {
+      const pv = opts.running ? (paceMin + f * (paceMax - paceMin)) : (paceMax - f * (paceMax - paceMin));
+      const lbl = el('text', { x: W - padR + 8, y: gy + 3, class: 'axis-label', 'text-anchor': 'start' });
+      lbl.textContent = fmtPaceAxis(pv);
+      svg.appendChild(lbl);
+    }
+  }
+  svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH, class: 'baseline' }));
+
+  const tickEvery = Math.max(1, Math.round(n / 6));
+  for (let i = 0; i < n; i += tickEvery) {
+    const lbl = el('text', { x: x(i), y: H - 8, class: 'axis-label', 'text-anchor': 'middle' });
+    lbl.textContent = opts.xLabel(rows[i]);
+    svg.appendChild(lbl);
+  }
+
+  if (elevVals.length) {
+    const base = (padT + plotH).toFixed(1);
+    let d = '';
+    let started = false;
+    let prevX = null;
+    rows.forEach((row, i) => {
+      const v = row.elevation_m;
+      if (v == null) {
+        if (started) d += `L${prevX.toFixed(1)},${base} Z `;
+        started = false;
+        return;
+      }
+      d += started ? `L${x(i).toFixed(1)},${yElev(v).toFixed(1)} ` : `M${x(i).toFixed(1)},${base} L${x(i).toFixed(1)},${yElev(v).toFixed(1)} `;
+      prevX = x(i);
+      started = true;
+    });
+    if (started) d += `L${prevX.toFixed(1)},${base} Z`;
+    svg.appendChild(el('path', { d: d.trim(), fill: color('--text-muted'), opacity: 0.18, stroke: 'none' }));
+  }
+
+  if (paceVals.length) {
+    let d = '';
+    let started = false;
+    rows.forEach((row, i) => {
+      const v = row.pace_axis_val;
+      if (v == null) { started = false; return; }
+      d += (started ? 'L' : 'M') + x(i).toFixed(1) + ',' + yPace(v).toFixed(1) + ' ';
+      started = true;
+    });
+    svg.appendChild(el('path', { d: d.trim(), fill: 'none', stroke: color('--series-2'), 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+
+  const crosshair = el('line', { x1: 0, x2: 0, y1: padT, y2: padT + plotH, stroke: color('--baseline'), 'stroke-width': 1, opacity: 0 });
+  svg.appendChild(crosshair);
+  const paceDot = el('circle', { r: 4.5, fill: color('--series-2'), stroke: color('--surface-1'), 'stroke-width': 2, opacity: 0 });
+  svg.appendChild(paceDot);
+
+  const hit = el('rect', { x: padL, y: padT, width: plotW, height: plotH, fill: 'transparent' });
+  svg.appendChild(hit);
+
+  function handleMove(evt) {
+    const rect = svg.getBoundingClientRect();
+    const px = (evt.clientX - rect.left) / rect.width * W;
+    let i = Math.round(((px - padL) / plotW) * (n - 1));
+    i = Math.min(n - 1, Math.max(0, i));
+    const row = rows[i];
+    const cx = x(i);
+    crosshair.setAttribute('x1', cx); crosshair.setAttribute('x2', cx);
+    crosshair.setAttribute('opacity', 1);
+    const trows = [];
+    if (row.pace_axis_val != null) {
+      paceDot.setAttribute('cx', cx); paceDot.setAttribute('cy', yPace(row.pace_axis_val)); paceDot.setAttribute('opacity', 1);
+      trows.push({
+        label: opts.running ? 'Pace' : 'Speed', color: color('--series-2'),
+        value: opts.running ? fmtPaceSeconds(row.pace_axis_val) + ' /km' : row.pace_axis_val.toFixed(1) + ' km/h',
+      });
+    } else {
+      paceDot.setAttribute('opacity', 0);
+    }
+    if (row.elevation_m != null) {
+      trows.push({ label: 'Elevation', color: color('--text-muted'), value: Math.round(row.elevation_m) + ' m' });
+    }
+    if (trows.length) showTooltip(evt.clientX, evt.clientY, trows, opts.xLabel(row));
+    else hideTooltip();
+  }
+  function handleLeave() {
+    crosshair.setAttribute('opacity', 0);
+    paceDot.setAttribute('opacity', 0);
+    hideTooltip();
+  }
+  hit.addEventListener('pointermove', handleMove);
+  hit.addEventListener('pointerleave', handleLeave);
+}
 
 function showOverview() {
   viewDetail.hidden = true;
@@ -753,7 +853,7 @@ async function showDetail(id) {
   const rows = series.distance_km.map((dk, i) => ({
     distance_km: dk,
     hr: series.hr[i],
-    pace_val: paceOrSpeedValue(series.speed_mps[i], w.type),
+    pace_axis_val: paceAxisValue(series.speed_mps[i], running),
     elevation_m: series.elevation_m[i],
     cadence: series.cadence[i],
   }));
@@ -770,12 +870,10 @@ async function showDetail(id) {
   }
 
   document.getElementById('paceCardTitle').textContent = running ? 'Pace' : 'Speed';
-  paceCtx = { rows, xLabel, laps, running, type: w.type };
-  paceMode = 'distance';
-  const paceToggle = document.getElementById('paceToggle');
-  paceToggle.hidden = laps.length < 2;
-  paceToggle.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'distance'));
-  renderPaceChart();
+  document.getElementById('paceCard').hidden = !hasAny('pace_axis_val');
+  if (hasAny('pace_axis_val')) {
+    buildPaceElevationChart(document.getElementById('detailPaceChart'), { rows, xLabel, running });
+  }
 
   document.getElementById('elevCard').hidden = !hasAny('elevation_m');
   if (hasAny('elevation_m')) {
@@ -798,6 +896,9 @@ async function showDetail(id) {
   document.getElementById('lapsSub').textContent = `${laps.length} laps recorded on the watch`;
   const lapsBody = document.getElementById('lapsBody');
   lapsBody.innerHTML = '';
+  const lapSpeeds = laps.map(l => l.avg_speed_mps).filter(v => v != null);
+  const lapSpeedMin = lapSpeeds.length ? Math.min(...lapSpeeds) : 0;
+  const lapSpeedMax = lapSpeeds.length ? Math.max(...lapSpeeds) : 1;
   laps.forEach(lap => {
     const tr = document.createElement('tr');
     const cells = [
@@ -810,6 +911,12 @@ async function showDetail(id) {
       lap.avg_cadence != null ? Math.round(lap.avg_cadence) : '—',
     ];
     cells.forEach(txt => { const td = document.createElement('td'); td.textContent = txt; tr.appendChild(td); });
+    if (lap.avg_speed_mps != null) {
+      const t = (lap.avg_speed_mps - lapSpeedMin) / ((lapSpeedMax - lapSpeedMin) || 1);
+      const rgb = lapSpeedColor(t);
+      tr.style.backgroundColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+      tr.style.color = textColorFor(rgb);
+    }
     lapsBody.appendChild(tr);
   });
 }
