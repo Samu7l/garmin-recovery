@@ -45,6 +45,9 @@ def build_days(data):
             avg_stress = None
         max_stress = summary.get("maxStressLevel")
 
+        sleep_dto = (raw.get("sleep") or {}).get("dailySleepDTO") or {}
+        sleep_seconds = sleep_dto.get("sleepTimeSeconds")
+
         days.append({
             "date": date_str,
             "steps": summary.get("totalSteps"),
@@ -52,6 +55,7 @@ def build_days(data):
             "resting_hr": resting_hr,
             "avg_stress": avg_stress,
             "max_stress": max_stress,
+            "sleep_seconds": sleep_seconds,
         })
     return days
 

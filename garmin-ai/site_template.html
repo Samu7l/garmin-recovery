@@ -26,6 +26,11 @@
     --series-8:       #e34948;
     --border:         rgba(11,11,11,0.10);
     --series-1-wash:  rgba(42,120,214,0.10);
+    --sleep-empty:    #ebedf0;
+    --sleep-red:      #d64545;
+    --sleep-yellow:   #e3b400;
+    --sleep-green:    #3fa54a;
+    --sleep-darkgreen: #196127;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -47,6 +52,11 @@
       --series-8:       #e66767;
       --border:         rgba(255,255,255,0.10);
       --series-1-wash:  rgba(57,135,229,0.14);
+      --sleep-empty:    #2a2f36;
+      --sleep-red:      #e5534b;
+      --sleep-yellow:   #d4a72c;
+      --sleep-green:    #4caf50;
+      --sleep-darkgreen: #2e7d32;
     }
   }
 
@@ -136,7 +146,21 @@
   .garmin-link:hover { text-decoration: underline; }
   .map-card { padding: 0; overflow: hidden; }
   #mapDiv { height: 380px; width: 100%; background: var(--gridline); }
+  .map-legend { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 11.5px; color: var(--text-secondary); }
+  .map-legend-bar { flex: 1; height: 8px; border-radius: 4px; }
   .no-map-note { padding: 16px 18px; font-size: 12.5px; color: var(--text-muted); }
+
+  .sport-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .sport-pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 560;
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1);
+    color: var(--text-secondary); cursor: pointer; font-family: inherit;
+  }
+  .sport-pill:hover { background: var(--series-1-wash); }
+
+  .sleep-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
+  .sleep-key { display: inline-flex; align-items: center; gap: 6px; }
+  .sleep-swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; flex: none; }
   .loading { padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
 </style>
 </head>
@@ -154,6 +178,26 @@
       <h2>Year at a glance</h2>
       <div class="card-sub">Distance per month &mdash; click a bar to jump to that month</div>
       <div class="chart-wrap"><svg id="yearChart" viewBox="0 0 800 170"></svg></div>
+    </div>
+
+    <div class="card" id="weeklyCard">
+      <h2>Weekly volume</h2>
+      <div class="card-sub">Distance per week, last 12 weeks &mdash; pick a sport</div>
+      <div class="sport-filters" id="sportFilters"></div>
+      <div class="chart-wrap"><svg id="weeklyChart" viewBox="0 0 800 200"></svg></div>
+    </div>
+
+    <div class="card" id="sleepCard">
+      <h2>Sleep</h2>
+      <div class="card-sub">Nightly sleep duration, past year &mdash; hover a day for detail</div>
+      <div class="chart-wrap"><svg id="sleepGrid" viewBox="0 0 800 110"></svg></div>
+      <div class="sleep-legend">
+        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-empty)"></span>No data</span>
+        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-red)"></span>&lt; 6h</span>
+        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-yellow)"></span>6&ndash;7h</span>
+        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-green)"></span>7&ndash;8h</span>
+        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-darkgreen)"></span>8h+</span>
+      </div>
     </div>
 
     <div class="month-nav">
@@ -220,6 +264,11 @@
 
     <div class="card map-card" id="mapCard">
       <div id="mapDiv"></div>
+      <div class="map-legend">
+        <span>Plus lente</span>
+        <span class="map-legend-bar" id="mapLegendBar"></span>
+        <span>Plus rapide</span>
+      </div>
     </div>
     <div class="card no-map-note" id="noMapCard" hidden>No GPS track available for this activity.</div>
 
@@ -365,6 +414,7 @@ function buildChart(svg, opts) {
     const span = maxV - minV || 1;
     minV -= span * 0.08;
     maxV += span * 0.08;
+    if (opts.minZero) minV = Math.max(0, minV);
   } else {
     maxV = maxV * 1.12 || 1;
   }
@@ -416,6 +466,13 @@ function buildChart(svg, opts) {
         d += (started ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1) + ' ';
         started = true;
       });
+      if (opts.area && d) {
+        const firstI = rows.findIndex(r => r[s.key] != null);
+        let lastI = -1;
+        for (let i = n - 1; i >= 0; i--) if (rows[i][s.key] != null) { lastI = i; break; }
+        const areaD = d.trim() + ` L${x(lastI).toFixed(1)},${(padT + plotH).toFixed(1)} L${x(firstI).toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+        svg.appendChild(el('path', { d: areaD, fill: s.color, opacity: 0.14, stroke: 'none' }));
+      }
       svg.appendChild(el('path', { d: d.trim(), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
       for (let i = n - 1; i >= 0; i--) {
         if (rows[i][s.key] != null) {
@@ -646,6 +703,148 @@ function renderYearChart() {
   });
 }
 
+// ---------- weekly volume by sport ----------
+const DAY_MS = 86400000;
+function ymdToUTC(s) { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); }
+function utcToYmd(ms) { return new Date(ms).toISOString().slice(0, 10); }
+function isoWeekStartYmd(dateStr) {
+  const ms = ymdToUTC(dateStr);
+  const dow = new Date(ms).getUTCDay(); // 0=Sun..6=Sat
+  const mondayOffset = (dow + 6) % 7;
+  return utcToYmd(ms - mondayOffset * DAY_MS);
+}
+function weeksBack(anchorDateStr, count) {
+  const startWeekMs = ymdToUTC(isoWeekStartYmd(anchorDateStr));
+  const out = [];
+  for (let i = count - 1; i >= 0; i--) out.push(utcToYmd(startWeekMs - i * 7 * DAY_MS));
+  return out;
+}
+
+let selectedSport = null;
+
+function renderWeeklySportChart() {
+  const card = document.getElementById('weeklyCard');
+  if (!DAYS.length) { card.hidden = true; return; }
+  const anchor = DAYS[DAYS.length - 1].date;
+  const weeks = weeksBack(anchor, 12);
+  const windowStart = weeks[0];
+  const inWindow = WORKOUTS.filter(w => w.date && w.type && w.date >= windowStart);
+
+  const totalsByType = {};
+  inWindow.forEach(w => { totalsByType[w.type] = (totalsByType[w.type] || 0) + (w.distance_m || 0); });
+  const typesSorted = Object.keys(totalsByType).sort((a, b) => totalsByType[b] - totalsByType[a]);
+
+  if (!typesSorted.length) { card.hidden = true; return; }
+  card.hidden = false;
+  if (!selectedSport || !typesSorted.includes(selectedSport)) selectedSport = typesSorted[0];
+
+  const filters = document.getElementById('sportFilters');
+  filters.innerHTML = '';
+  typesSorted.forEach(t => {
+    const tm = typeMeta(t);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sport-pill';
+    btn.innerHTML = `<span class="type-dot" style="background:${tm.color}"></span>${tm.label}`;
+    if (t === selectedSport) {
+      btn.style.background = tm.color;
+      btn.style.borderColor = tm.color;
+      btn.style.color = '#fff';
+    }
+    btn.addEventListener('click', () => { selectedSport = t; renderWeeklySportChart(); });
+    filters.appendChild(btn);
+  });
+
+  const rows = weeks.map(wk => {
+    const wkEndStr = utcToYmd(ymdToUTC(wk) + 7 * DAY_MS);
+    const km = WORKOUTS
+      .filter(w => w.type === selectedSport && w.date && w.date >= wk && w.date < wkEndStr)
+      .reduce((a, w) => a + (w.distance_m || 0), 0) / 1000;
+    return { week: wk, distance_km: km };
+  });
+
+  const tm = typeMeta(selectedSport);
+  buildChart(document.getElementById('weeklyChart'), {
+    rows, xLabel: r => fmtDate(r.week), tickEvery: 2,
+    series: [{ key: 'distance_km', label: tm.label, color: tm.color }],
+    mode: 'line', area: true, minZero: true, valueFmt: v => v.toFixed(1) + ' km',
+  });
+}
+
+// ---------- sleep grid ----------
+function sleepTier(hours) {
+  if (hours == null) return 'empty';
+  if (hours < 6) return 'red';
+  if (hours < 7) return 'yellow';
+  if (hours < 8) return 'green';
+  return 'darkgreen';
+}
+const SLEEP_TIER_VAR = { empty: '--sleep-empty', red: '--sleep-red', yellow: '--sleep-yellow', green: '--sleep-green', darkgreen: '--sleep-darkgreen' };
+
+function renderSleepGrid() {
+  const svg = document.getElementById('sleepGrid');
+  svg.innerHTML = '';
+  if (!DAYS.length) return;
+
+  const byDate = {};
+  DAYS.forEach(d => { byDate[d.date] = d.sleep_seconds != null ? d.sleep_seconds / 3600 : null; });
+
+  const firstDate = DAYS[0].date;
+  const lastDate = DAYS[DAYS.length - 1].date;
+  const endMs = ymdToUTC(lastDate);
+  const startDow = new Date(endMs).getUTCDay();
+  const gridStartMs = endMs - 371 * DAY_MS - startDow * DAY_MS; // ~53 weeks back, aligned to a Sunday
+  const totalWeeks = Math.ceil((endMs - gridStartMs) / DAY_MS / 7) + 1;
+
+  const cell = 11, gap = 3, cellStep = cell + gap;
+  const padL = 30, padT = 16;
+  const W = padL + totalWeeks * cellStep + 4;
+  const H = padT + 7 * cellStep + 4;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  let lastMonth = -1;
+  for (let wi = 0; wi < totalWeeks; wi++) {
+    const wkStartMs = gridStartMs + wi * 7 * DAY_MS;
+    const m = new Date(wkStartMs).getUTCMonth();
+    if (m !== lastMonth) {
+      lastMonth = m;
+      const lbl = el('text', { x: padL + wi * cellStep, y: 10, class: 'axis-label' });
+      lbl.textContent = new Date(wkStartMs).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' });
+      svg.appendChild(lbl);
+    }
+  }
+
+  const dowLabels = { 1: 'Mon', 3: 'Wed', 5: 'Fri' };
+  Object.keys(dowLabels).forEach(dow => {
+    const lbl = el('text', { x: padL - 6, y: padT + Number(dow) * cellStep + cell - 1, class: 'axis-label', 'text-anchor': 'end' });
+    lbl.textContent = dowLabels[dow];
+    svg.appendChild(lbl);
+  });
+
+  for (let wi = 0; wi < totalWeeks; wi++) {
+    for (let dow = 0; dow < 7; dow++) {
+      const dayMs = gridStartMs + wi * 7 * DAY_MS + dow * DAY_MS;
+      if (dayMs > endMs) continue;
+      const dateStr = utcToYmd(dayMs);
+      if (dateStr < firstDate) continue;
+      const hours = byDate[dateStr];
+      const tier = sleepTier(hours);
+      const tierColor = color(SLEEP_TIER_VAR[tier]);
+      const rect = el('rect', {
+        x: padL + wi * cellStep, y: padT + dow * cellStep, width: cell, height: cell, rx: 2, ry: 2,
+        fill: tierColor,
+      });
+      rect.addEventListener('mouseenter', (evt) => {
+        showTooltip(evt.clientX, evt.clientY,
+          [{ label: 'Sleep', color: tierColor, value: hours != null ? hours.toFixed(1) + ' h' : 'No data' }],
+          fmtDateFull(dateStr));
+      });
+      rect.addEventListener('mouseleave', hideTooltip);
+      svg.appendChild(rect);
+    }
+  }
+}
+
 function selectMonth(ym) {
   selectedMonth = ym;
   const months = monthsAvailable();
@@ -705,7 +904,7 @@ function renderOverview() {
 
   document.getElementById('note').innerHTML =
     '<strong>Not shown:</strong> HRV, body battery, and training readiness — Garmin returns no data for these from this device. ' +
-    'Sleep is now captured too (a better endpoint found it) but isn\'t visualized here yet.';
+    'Sleep tracking on the watch only started recently, so most days in the sleep grid above still show no data.';
 
   document.getElementById('prevMonthBtn').addEventListener('click', () => {
     const months = monthsAvailable();
@@ -719,6 +918,8 @@ function renderOverview() {
   });
 
   renderYearChart();
+  renderWeeklySportChart();
+  renderSleepGrid();
   selectMonth(monthsAvailable()[monthsAvailable().length - 1]);
 }
 
@@ -728,12 +929,13 @@ const viewDetail = document.getElementById('view-detail');
 let leafletMap = null;
 let routeLayer = null;
 
+// Spectral ramp (slowest -> fastest), per the reference legend photo.
 const SPEED_RAMP = [
-  [0.00, [134, 182, 239]],
-  [0.25, [85, 152, 231]],
-  [0.50, [42, 120, 214]],
-  [0.75, [28, 92, 171]],
-  [1.00, [16, 66, 129]],
+  [0.00, [214, 40, 40]],    // red   - slowest
+  [0.25, [244, 140, 6]],    // orange
+  [0.50, [255, 214, 10]],   // yellow
+  [0.75, [58, 166, 85]],    // green
+  [1.00, [42, 120, 214]],   // blue  - fastest
 ];
 function rampColor(t) {
   t = Math.max(0, Math.min(1, t));
@@ -747,6 +949,13 @@ function rampColor(t) {
   }
   return `rgb(${SPEED_RAMP[SPEED_RAMP.length-1][1].join(',')})`;
 }
+function setMapLegendGradient() {
+  const bar = document.getElementById('mapLegendBar');
+  if (!bar) return;
+  const stops = SPEED_RAMP.map(([t, c]) => `rgb(${c[0]},${c[1]},${c[2]}) ${Math.round(t * 100)}%`);
+  bar.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+}
+setMapLegendGradient();
 
 function ensureMap() {
   if (leafletMap) return leafletMap;
