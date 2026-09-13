@@ -189,7 +189,8 @@
 
     <div class="card" id="sleepCard">
       <h2>Sleep</h2>
-      <div class="card-sub">Nightly sleep duration, past year &mdash; hover a day for detail</div>
+      <div class="card-sub">Nightly sleep duration &mdash; hover a day for detail</div>
+      <div class="sport-filters" id="sleepYearTabs"></div>
       <div class="chart-wrap"><svg id="sleepGrid" viewBox="0 0 800 110"></svg></div>
       <div class="sleep-legend">
         <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-empty)"></span>No data</span>
@@ -321,6 +322,7 @@ const color = (name) => cs.getPropertyValue(name).trim();
 
 let DAYS = [];
 let WORKOUTS = [];
+let SLEEP_HISTORY = {};
 const detailCache = {};
 
 function fmtDate(iso) {
@@ -457,7 +459,7 @@ function buildChart(svg, opts) {
       }));
     });
   } else {
-    opts.series.forEach(s => {
+    opts.series.forEach((s, si) => {
       let d = '';
       let started = false;
       rows.forEach((row, i) => {
@@ -471,7 +473,14 @@ function buildChart(svg, opts) {
         let lastI = -1;
         for (let i = n - 1; i >= 0; i--) if (rows[i][s.key] != null) { lastI = i; break; }
         const areaD = d.trim() + ` L${x(lastI).toFixed(1)},${(padT + plotH).toFixed(1)} L${x(firstI).toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
-        svg.appendChild(el('path', { d: areaD, fill: s.color, opacity: 0.14, stroke: 'none' }));
+        const gradId = `areaGrad-${(svg.id || 'chart')}-${si}`;
+        const defs = el('defs', {});
+        const grad = el('linearGradient', { id: gradId, x1: '0', y1: '0', x2: '0', y2: '1' });
+        grad.appendChild(el('stop', { offset: '0%', 'stop-color': s.color, 'stop-opacity': '0.35' }));
+        grad.appendChild(el('stop', { offset: '100%', 'stop-color': s.color, 'stop-opacity': '0' }));
+        defs.appendChild(grad);
+        svg.appendChild(defs);
+        svg.appendChild(el('path', { d: areaD, fill: `url(#${gradId})`, stroke: 'none' }));
       }
       svg.appendChild(el('path', { d: d.trim(), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
       for (let i = n - 1; i >= 0; i--) {
@@ -781,19 +790,56 @@ function sleepTier(hours) {
 }
 const SLEEP_TIER_VAR = { empty: '--sleep-empty', red: '--sleep-red', yellow: '--sleep-yellow', green: '--sleep-green', darkgreen: '--sleep-darkgreen' };
 
-function renderSleepGrid() {
+function sleepHoursByDate() {
+  const map = {};
+  Object.keys(SLEEP_HISTORY).forEach(d => { map[d] = SLEEP_HISTORY[d] / 3600; });
+  DAYS.forEach(d => { if (d.sleep_seconds != null) map[d.date] = d.sleep_seconds / 3600; });
+  return map;
+}
+
+function sleepYearsAvailable() {
+  const years = new Set();
+  Object.keys(SLEEP_HISTORY).forEach(d => years.add(Number(d.slice(0, 4))));
+  DAYS.forEach(d => years.add(Number(d.date.slice(0, 4))));
+  return [...years].sort((a, b) => a - b);
+}
+
+let selectedSleepYear = null;
+
+function renderSleepSection() {
+  if (!DAYS.length) { document.getElementById('sleepCard').hidden = true; return; }
+  const years = sleepYearsAvailable();
+  const currentYear = Number(DAYS[DAYS.length - 1].date.slice(0, 4));
+  if (selectedSleepYear == null || !years.includes(selectedSleepYear)) selectedSleepYear = currentYear;
+
+  const tabs = document.getElementById('sleepYearTabs');
+  tabs.innerHTML = '';
+  years.forEach(y => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sport-pill';
+    btn.textContent = y.toString();
+    if (y === selectedSleepYear) {
+      const c = color('--series-1');
+      btn.style.background = c; btn.style.borderColor = c; btn.style.color = '#fff';
+    }
+    btn.addEventListener('click', () => { selectedSleepYear = y; renderSleepSection(); });
+    tabs.appendChild(btn);
+  });
+
+  renderSleepGrid(selectedSleepYear, sleepHoursByDate());
+}
+
+function renderSleepGrid(year, byDate) {
   const svg = document.getElementById('sleepGrid');
   svg.innerHTML = '';
-  if (!DAYS.length) return;
 
-  const byDate = {};
-  DAYS.forEach(d => { byDate[d.date] = d.sleep_seconds != null ? d.sleep_seconds / 3600 : null; });
-
-  const firstDate = DAYS[0].date;
-  const lastDate = DAYS[DAYS.length - 1].date;
-  const endMs = ymdToUTC(lastDate);
-  const startDow = new Date(endMs).getUTCDay();
-  const gridStartMs = endMs - 371 * DAY_MS - startDow * DAY_MS; // ~53 weeks back, aligned to a Sunday
+  const lastDataDate = DAYS[DAYS.length - 1].date;
+  const yearEndCap = year === Number(lastDataDate.slice(0, 4)) ? lastDataDate : `${year}-12-31`;
+  const startMs = Date.UTC(year, 0, 1);
+  const endMs = ymdToUTC(yearEndCap);
+  const startDow = new Date(startMs).getUTCDay();
+  const gridStartMs = startMs - startDow * DAY_MS;
   const totalWeeks = Math.ceil((endMs - gridStartMs) / DAY_MS / 7) + 1;
 
   const cell = 11, gap = 3, cellStep = cell + gap;
@@ -805,11 +851,13 @@ function renderSleepGrid() {
   let lastMonth = -1;
   for (let wi = 0; wi < totalWeeks; wi++) {
     const wkStartMs = gridStartMs + wi * 7 * DAY_MS;
-    const m = new Date(wkStartMs).getUTCMonth();
+    const labelDayMs = Math.max(wkStartMs, startMs); // clamp to the visible year, so a week straddling Dec/Jan labels as the new year's month
+    if (labelDayMs > endMs) continue;
+    const m = new Date(labelDayMs).getUTCMonth();
     if (m !== lastMonth) {
       lastMonth = m;
       const lbl = el('text', { x: padL + wi * cellStep, y: 10, class: 'axis-label' });
-      lbl.textContent = new Date(wkStartMs).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' });
+      lbl.textContent = new Date(labelDayMs).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' });
       svg.appendChild(lbl);
     }
   }
@@ -824,9 +872,8 @@ function renderSleepGrid() {
   for (let wi = 0; wi < totalWeeks; wi++) {
     for (let dow = 0; dow < 7; dow++) {
       const dayMs = gridStartMs + wi * 7 * DAY_MS + dow * DAY_MS;
-      if (dayMs > endMs) continue;
+      if (dayMs < startMs || dayMs > endMs) continue;
       const dateStr = utcToYmd(dayMs);
-      if (dateStr < firstDate) continue;
       const hours = byDate[dateStr];
       const tier = sleepTier(hours);
       const tierColor = color(SLEEP_TIER_VAR[tier]);
@@ -904,7 +951,7 @@ function renderOverview() {
 
   document.getElementById('note').innerHTML =
     '<strong>Not shown:</strong> HRV, body battery, and training readiness — Garmin returns no data for these from this device. ' +
-    'Sleep tracking on the watch only started recently, so most days in the sleep grid above still show no data.';
+    'Sleep coverage varies by year depending on whether the watch was worn overnight — gray cells in the sleep grid mean no reading, not zero sleep.';
 
   document.getElementById('prevMonthBtn').addEventListener('click', () => {
     const months = monthsAvailable();
@@ -919,7 +966,7 @@ function renderOverview() {
 
   renderYearChart();
   renderWeeklySportChart();
-  renderSleepGrid();
+  renderSleepSection();
   selectMonth(monthsAvailable()[monthsAvailable().length - 1]);
 }
 
@@ -1295,6 +1342,7 @@ async function init() {
   const data = await res.json();
   DAYS = data.days;
   WORKOUTS = data.workouts;
+  SLEEP_HISTORY = data.sleep_history || {};
   renderOverview();
   document.getElementById('view-loading').hidden = true;
   syncFromHash();

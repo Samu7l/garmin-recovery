@@ -46,7 +46,7 @@ def build_days(data):
         max_stress = summary.get("maxStressLevel")
 
         sleep_dto = (raw.get("sleep") or {}).get("dailySleepDTO") or {}
-        sleep_seconds = sleep_dto.get("sleepTimeSeconds")
+        sleep_seconds = sleep_dto.get("sleepTimeSeconds") or (raw.get("sleep_bulk") or {}).get("total_sleep_s")
 
         days.append({
             "date": date_str,
@@ -87,11 +87,15 @@ def main():
     data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
     days = build_days(data)
     workouts = build_workouts(data)
+    sleep_history = data.get("sleep_history") or {}
 
     DOCS_ACTIVITIES_DIR.mkdir(parents=True, exist_ok=True)
 
     (DOCS_DATA_DIR / "overview.json").write_text(
-        json.dumps({"days": days, "workouts": workouts}, ensure_ascii=False, default=str),
+        json.dumps(
+            {"days": days, "workouts": workouts, "sleep_history": sleep_history},
+            ensure_ascii=False, default=str,
+        ),
         encoding="utf-8",
     )
 
@@ -111,7 +115,8 @@ def main():
 
     shutil.copyfile(TEMPLATE_FILE, DOCS_DIR / "index.html")
 
-    print(f"wrote {DOCS_DIR} : {len(days)} days, {len(workouts)} workouts, {n_activities} activity detail files")
+    print(f"wrote {DOCS_DIR} : {len(days)} days, {len(workouts)} workouts, "
+          f"{n_activities} activity detail files, {len(sleep_history)} historical sleep day(s)")
 
 
 if __name__ == "__main__":
