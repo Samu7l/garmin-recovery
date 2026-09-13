@@ -914,10 +914,14 @@ function showDetail(id) {
       lap.avg_hr != null ? Math.round(lap.avg_hr) : '—',
       lap.avg_cadence != null ? Math.round(lap.avg_cadence) : '—',
     ];
+    const fastPace = running && lap.avg_speed_mps != null && (1000 / lap.avg_speed_mps) < 270;
     cells.forEach((txt, ci) => {
       const td = document.createElement('td');
       td.textContent = txt;
-      if (ci === 3) td.style.fontWeight = '700';
+      if (ci === 3) {
+        td.style.fontWeight = '700';
+        if (fastPace) td.style.color = '#ffffff';
+      }
       tr.appendChild(td);
     });
     if (lap.avg_speed_mps != null) {
