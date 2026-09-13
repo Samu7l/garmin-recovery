@@ -7,3 +7,6 @@ garmin-ai/garmin/
 # Python
 __pycache__/
 *.pyc
+
+# Claude Code internal session files - not part of this project
+.claude/
