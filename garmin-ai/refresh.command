@@ -2,6 +2,11 @@
 # macOS equivalent of refresh.bat: double-click this file in Finder to run it.
 cd "$(dirname "$0")"
 
+# Double-clicking (or running "./refresh.command") starts a non-interactive
+# shell that never sources ~/.zshrc, so the Anaconda python3 that has
+# garminconnect/curl_cffi/Pillow installed wouldn't be on PATH otherwise.
+export PATH="/opt/anaconda3/bin:$PATH"
+
 echo "=== Pulling recent Garmin data ==="
 python3 garmin_sync.py --days 5
 
