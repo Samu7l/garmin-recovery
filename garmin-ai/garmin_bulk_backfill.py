@@ -5,13 +5,16 @@ of one API call per day. Read-only against Garmin.
 
 Steps, calories, resting heart rate, and sleep each come from a single bulk
 call (the library auto-chunks into <=28-day requests internally). Stress has
-no daily-range endpoint, so days already covered by the regular daily sync
-(garmin_sync.py, real per-day values) are left alone; anything older falls
-back to the weekly stress average for that week (the closest available
-granularity for the deep past). Body battery, HRV, and training readiness
-are skipped entirely for the backfill: confirmed empty for this account
-against the real API, and not worth the extra calls (body battery's range
-endpoint isn't auto-chunked and errors past ~28 days regardless).
+no daily-range endpoint: a day already covered by the regular daily sync
+(garmin_sync.py, real per-day values) is left alone (skipped below); any
+other day falls back to the weekly stress average for that week (the
+closest available granularity) regardless of how recent it is - a day
+missing here won't retroactively get picked up by garmin_sync.py, whose
+window is normally just the last few days, so there's no "it'll be covered
+later" case to special-case. Body battery, HRV, and training readiness are
+skipped entirely for the backfill: confirmed empty for this account against
+the real API, and not worth the extra calls (body battery's range endpoint
+isn't auto-chunked and errors past ~28 days regardless).
 
 Run garmin_sync.py at least once first to be logged in.
 """
@@ -21,8 +24,6 @@ import sys
 from datetime import date, timedelta
 
 from garmin_sync import DATA_FILE, load_client, load_data_json, save_data_json
-
-DAILY_STRESS_WINDOW_DAYS = 60
 
 
 def index_by_date(rows):
@@ -40,7 +41,6 @@ def main():
     today = date.today()
     start = today - timedelta(days=args.days)
     start_s, end_s = start.isoformat(), today.isoformat()
-    recent_cutoff = (today - timedelta(days=DAILY_STRESS_WINDOW_DAYS)).isoformat()
 
     print(f"Fetching bulk wellness {start_s} .. {end_s} ...")
 
@@ -85,7 +85,7 @@ def main():
         sleep_vals = (sleep_row or {}).get("values") or {}
 
         resting_hr = rhr_row.get("value") if rhr_row else sleep_vals.get("restingHeartRate")
-        avg_stress = None if day_str >= recent_cutoff else stress_for_week(day_str)
+        avg_stress = stress_for_week(day_str)
 
         data["wellness"][day_str] = {
             "summary": {
