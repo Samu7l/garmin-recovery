@@ -16,6 +16,12 @@ skipped entirely for the backfill: confirmed empty for this account against
 the real API, and not worth the extra calls (body battery's range endpoint
 isn't auto-chunked and errors past ~28 days regardless).
 
+VO2 max also comes from a single bulk range call, stored separately under
+data["vo2max_history"] (date -> {vo2max, fitness_age}) rather than inside
+"wellness", since it's unrelated to the day's steps/sleep/stress and updates
+independently. Always overwritten on every run (cheap single call, unlike
+the day-by-day wellness skip logic above) so revised estimates stay current.
+
 Run garmin_sync.py at least once first to be logged in.
 """
 
@@ -68,6 +74,18 @@ def main():
             else:
                 break
         return val
+
+    vo2max_rows = safe_call("VO2 max", lambda: client.get_max_metrics_range(start_s, end_s))
+    vo2max_added = 0
+    vo2max_history = data.setdefault("vo2max_history", {})
+    for row in (vo2max_rows or []):
+        generic = row.get("generic") or {}
+        cal_date = generic.get("calendarDate")
+        vo2max_value = generic.get("vo2MaxValue")
+        if cal_date and vo2max_value is not None:
+            vo2max_history[cal_date] = {"vo2max": vo2max_value, "fitness_age": generic.get("fitnessAge")}
+            vo2max_added += 1
+    print(f"VO2 max: {vo2max_added} day(s) with a value (of {len(vo2max_rows or [])} fetched)")
 
     all_dates = [(start + timedelta(days=i)).isoformat() for i in range((today - start).days + 1)]
 

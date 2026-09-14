@@ -56,8 +56,61 @@ def build_days(data):
             "avg_stress": avg_stress,
             "max_stress": max_stress,
             "sleep_seconds": sleep_seconds,
+            # bulk_backfill's avg_stress is a flat weekly average, not a real
+            # per-day reading - the frontend needs to know which is which so
+            # it doesn't feed repeated placeholder values into correlations.
+            "stress_is_daily": raw.get("source") != "bulk_backfill",
         })
     return days
+
+
+def build_vo2max(data):
+    """Merge the one-off range backfill (data["vo2max_history"]) with whatever
+    daily sync has picked up more recently via each day's training_status."""
+    points = dict(data.get("vo2max_history") or {})
+    for date_str, raw in data["wellness"].items():
+        generic = ((raw.get("training_status") or {}).get("mostRecentVO2Max") or {}).get("generic") or {}
+        cal_date = generic.get("calendarDate")
+        value = generic.get("vo2MaxValue")
+        if cal_date and value is not None:
+            points[cal_date] = {"vo2max": value, "fitness_age": generic.get("fitnessAge")}
+    return [
+        {"date": d, "vo2max": v.get("vo2max"), "fitness_age": v.get("fitness_age")}
+        for d, v in sorted(points.items()) if v.get("vo2max") is not None
+    ]
+
+
+def build_training_status(data):
+    """Only daily sync fetches this, so scan back from today for the most
+    recent day that actually has it (bulk-backfilled days won't)."""
+    for date_str, raw in sorted(data["wellness"].items(), reverse=True):
+        latest = ((raw.get("training_status") or {}).get("mostRecentTrainingStatus") or {}).get("latestTrainingStatusData") or {}
+        entry = next(iter(latest.values()), None)
+        if not entry:
+            continue
+        return {
+            "date": entry.get("calendarDate") or date_str,
+            "status_code": entry.get("trainingStatus"),
+            "weekly_load": entry.get("weeklyTrainingLoad"),
+            "load_min": entry.get("loadTunnelMin"),
+            "load_max": entry.get("loadTunnelMax"),
+            "load_trend": entry.get("loadLevelTrend"),
+            "sport": entry.get("sport"),
+        }
+    return None
+
+
+def build_fitness_age(data):
+    for date_str, raw in sorted(data["wellness"].items(), reverse=True):
+        fa = raw.get("fitness_age") or {}
+        if fa.get("fitnessAge") is not None:
+            return {
+                "date": date_str,
+                "chronological_age": fa.get("chronologicalAge"),
+                "fitness_age": fa.get("fitnessAge"),
+                "achievable_fitness_age": fa.get("achievableFitnessAge"),
+            }
+    return None
 
 
 def build_workouts(data):
@@ -88,12 +141,22 @@ def main():
     days = build_days(data)
     workouts = build_workouts(data)
     sleep_history = data.get("sleep_history") or {}
+    vo2max = build_vo2max(data)
+    training_status = build_training_status(data)
+    fitness_age = build_fitness_age(data)
 
     DOCS_ACTIVITIES_DIR.mkdir(parents=True, exist_ok=True)
 
     (DOCS_DATA_DIR / "overview.json").write_text(
         json.dumps(
-            {"days": days, "workouts": workouts, "sleep_history": sleep_history},
+            {
+                "days": days,
+                "workouts": workouts,
+                "sleep_history": sleep_history,
+                "vo2max": vo2max,
+                "training_status": training_status,
+                "fitness_age": fitness_age,
+            },
             ensure_ascii=False, default=str,
         ),
         encoding="utf-8",

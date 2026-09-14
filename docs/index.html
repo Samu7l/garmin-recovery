@@ -83,6 +83,13 @@
   .card h2 { font-size: 14.5px; font-weight: 620; margin: 0 0 2px; }
   .card .card-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
 
+  .two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0,1fr); } }
+  .col > .card:last-child { margin-bottom: 0; }
+
+  .status-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 620; }
+  .gauge-caption { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
   .month-nav {
     display: flex; align-items: center; justify-content: center; gap: 14px;
     margin: -4px 0 20px;
@@ -174,33 +181,6 @@
     <h1>Garmin Recovery</h1>
     <p class="subhead" id="subhead"></p>
 
-    <div class="card">
-      <h2>Year at a glance</h2>
-      <div class="card-sub">Distance per month &mdash; click a bar to jump to that month</div>
-      <div class="chart-wrap"><svg id="yearChart" viewBox="0 0 800 170"></svg></div>
-    </div>
-
-    <div class="card" id="weeklyCard">
-      <h2>Weekly volume</h2>
-      <div class="card-sub">Distance per week, last 12 weeks &mdash; pick a sport</div>
-      <div class="sport-filters" id="sportFilters"></div>
-      <div class="chart-wrap"><svg id="weeklyChart" viewBox="0 0 800 200"></svg></div>
-    </div>
-
-    <div class="card" id="sleepCard">
-      <h2>Sleep</h2>
-      <div class="card-sub">Nightly sleep duration &mdash; hover a day for detail</div>
-      <div class="sport-filters" id="sleepYearTabs"></div>
-      <div class="chart-wrap"><svg id="sleepGrid" viewBox="0 0 800 110"></svg></div>
-      <div class="sleep-legend">
-        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-empty)"></span>No data</span>
-        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-red)"></span>&lt; 6h</span>
-        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-yellow)"></span>6&ndash;7h</span>
-        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-green)"></span>7&ndash;8h</span>
-        <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-darkgreen)"></span>8h+</span>
-      </div>
-    </div>
-
     <div class="month-nav">
       <button class="nav-btn" id="prevMonthBtn" aria-label="Previous month">&larr;</button>
       <span class="month-label" id="monthLabel"></span>
@@ -209,41 +189,106 @@
 
     <div class="kpi-row" id="kpiRow"></div>
 
-    <div class="card">
-      <h2>Resting heart rate</h2>
-      <div class="card-sub">Selected month</div>
-      <div class="chart-wrap"><svg id="rhrChart" viewBox="0 0 800 220"></svg></div>
-    </div>
+    <div class="two-col">
+      <div class="col">
+        <div class="card" id="weeklyCard">
+          <h2>Weekly volume</h2>
+          <div class="card-sub">Distance per week, last 12 weeks &mdash; pick a sport</div>
+          <div class="sport-filters" id="sportFilters"></div>
+          <div class="chart-wrap"><svg id="weeklyChart" viewBox="0 0 800 200"></svg></div>
+        </div>
 
-    <div class="card">
-      <h2>Daily steps</h2>
-      <div class="card-sub">Selected month</div>
-      <div class="chart-wrap"><svg id="stepsChart" viewBox="0 0 800 220"></svg></div>
-    </div>
-
-    <div class="card">
-      <h2>Stress</h2>
-      <div class="card-sub">Average and peak, 0&ndash;100 scale</div>
-      <div class="legend">
-        <span class="key"><span class="swatch-line" style="background:var(--series-1)"></span>Average</span>
-        <span class="key"><span class="swatch-line" style="background:var(--series-2)"></span>Peak</span>
+        <div class="card" id="sleepCard">
+          <h2>Sleep</h2>
+          <div class="card-sub">Nightly sleep duration &mdash; hover a day for detail</div>
+          <div class="sport-filters" id="sleepYearTabs"></div>
+          <div class="chart-wrap"><svg id="sleepGrid" viewBox="0 0 800 110"></svg></div>
+          <div class="sleep-legend">
+            <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-empty)"></span>No data</span>
+            <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-red)"></span>&lt; 6h</span>
+            <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-yellow)"></span>6&ndash;7h</span>
+            <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-green)"></span>7&ndash;8h</span>
+            <span class="sleep-key"><span class="sleep-swatch" style="background:var(--sleep-darkgreen)"></span>8h+</span>
+          </div>
+        </div>
       </div>
-      <div class="chart-wrap"><svg id="stressChart" viewBox="0 0 800 220"></svg></div>
-    </div>
 
-    <div class="card">
-      <h2>Workouts</h2>
-      <div class="card-sub" id="wkSub">Click a row for full activity detail — route, pace, heart rate, laps.</div>
-      <div class="table-scroll">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Date</th><th>Activity</th><th>Type</th><th>Distance</th>
-              <th>Duration</th><th>Avg&nbsp;HR</th><th>Max&nbsp;HR</th><th>Training effect</th>
-            </tr>
-          </thead>
-          <tbody id="wkBody"></tbody>
-        </table>
+      <div class="col">
+        <div class="card">
+          <h2>Workouts</h2>
+          <div class="card-sub" id="wkSub">Click a row for full activity detail — route, pace, heart rate, laps.</div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th><th>Activity</th><th>Type</th><th>Distance</th>
+                  <th>Duration</th><th>Avg&nbsp;HR</th><th>Max&nbsp;HR</th><th>Training effect</th>
+                </tr>
+              </thead>
+              <tbody id="wkBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Year at a glance</h2>
+          <div class="card-sub">Distance per month &mdash; click a bar to jump to that month</div>
+          <div class="chart-wrap"><svg id="yearChart" viewBox="0 0 800 170"></svg></div>
+        </div>
+
+        <div class="card">
+          <h2>Resting heart rate</h2>
+          <div class="card-sub">Selected month</div>
+          <div class="chart-wrap"><svg id="rhrChart" viewBox="0 0 800 220"></svg></div>
+        </div>
+
+        <div class="card">
+          <h2>Daily steps</h2>
+          <div class="card-sub">Selected month</div>
+          <div class="chart-wrap"><svg id="stepsChart" viewBox="0 0 800 220"></svg></div>
+        </div>
+
+        <div class="card">
+          <h2>Stress</h2>
+          <div class="card-sub">Average and peak, 0&ndash;100 scale &mdash; selected month</div>
+          <div class="legend">
+            <span class="key"><span class="swatch-line" style="background:var(--series-1)"></span>Average</span>
+            <span class="key"><span class="swatch-line" style="background:var(--series-2)"></span>Peak</span>
+          </div>
+          <div class="chart-wrap"><svg id="stressChart" viewBox="0 0 800 220"></svg></div>
+        </div>
+
+        <div class="card" id="stressSleepCard">
+          <h2>Stress vs. sleep</h2>
+          <div class="card-sub" id="stressSleepSub">Average daily stress vs sleep duration that morning &mdash; all-time, real per-day readings only</div>
+          <div class="chart-wrap"><svg id="stressSleepChart" viewBox="0 0 800 220"></svg></div>
+        </div>
+
+        <div class="card" id="stressAfterCard">
+          <h2>Stress the day after a hard session</h2>
+          <div class="card-sub" id="stressAfterSub">Day after a hard workout (training effect &ge; 3) vs a full rest day &mdash; all-time</div>
+          <div class="kpi-row" id="stressAfterKpiRow"></div>
+        </div>
+
+        <div class="card" id="vo2maxCard">
+          <h2>VO2 Max</h2>
+          <div class="card-sub">Estimated aerobic fitness (running)</div>
+          <div class="chart-wrap"><svg id="vo2maxChart" viewBox="0 0 800 180"></svg></div>
+        </div>
+
+        <div class="card" id="trainingStatusCard">
+          <h2>Training status</h2>
+          <div class="card-sub" id="tsSub">Weekly training load vs your optimal range</div>
+          <div class="kpi-row" id="tsKpiRow"></div>
+          <div class="chart-wrap"><svg id="tsGauge" viewBox="0 0 800 60"></svg></div>
+          <p class="note" id="tsNote"></p>
+        </div>
+
+        <div class="card" id="fitnessAgeCard">
+          <h2>Fitness age</h2>
+          <div class="card-sub" id="faSub">Estimated fitness age vs chronological age</div>
+          <div class="kpi-row" id="faKpiRow"></div>
+        </div>
       </div>
     </div>
 
@@ -323,6 +368,9 @@ const color = (name) => cs.getPropertyValue(name).trim();
 let DAYS = [];
 let WORKOUTS = [];
 let SLEEP_HISTORY = {};
+let VO2MAX = [];
+let TRAINING_STATUS = null;
+let FITNESS_AGE = null;
 const detailCache = {};
 
 function fmtDate(iso) {
@@ -946,6 +994,201 @@ function selectMonth(ym) {
   renderYearChart();
 }
 
+// ---------- scatter chart (stress vs sleep) ----------
+function renderScatter(svg, points, opts) {
+  const W = 800, H = svg.viewBox.baseVal.height || 220;
+  const padL = 40, padR = 14, padT = 12, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  svg.innerHTML = '';
+  if (!points.length) return;
+
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  let xMin = Math.min(...xs), xMax = Math.max(...xs);
+  let yMin = 0, yMax = Math.max(...ys, 25) * 1.15;
+  const xSpan = (xMax - xMin) || 1;
+  xMin -= xSpan * 0.06; xMax += xSpan * 0.06;
+  const x = v => padL + ((v - xMin) / (xMax - xMin || 1)) * plotW;
+  const y = v => padT + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH;
+
+  const steps = 4;
+  for (let s = 0; s <= steps; s++) {
+    const v = yMin + (s / steps) * (yMax - yMin);
+    const gy = y(v);
+    svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, class: 'gridline' }));
+    const lbl = el('text', { x: padL - 8, y: gy + 3, class: 'axis-label', 'text-anchor': 'end' });
+    lbl.textContent = Math.round(v);
+    svg.appendChild(lbl);
+  }
+  svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH, class: 'baseline' }));
+
+  const xTicks = 5;
+  for (let i = 0; i <= xTicks; i++) {
+    const v = xMin + (i / xTicks) * (xMax - xMin);
+    const lbl = el('text', { x: x(v), y: H - 8, class: 'axis-label', 'text-anchor': 'middle' });
+    lbl.textContent = v.toFixed(1) + 'h';
+    svg.appendChild(lbl);
+  }
+
+  // Garmin's own calme/stress boundary (see GARMIN_API_NOTES.md) - not our threshold.
+  if (opts.stressThreshold && yMax > 25) {
+    const ty = y(25);
+    svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: ty, y2: ty, stroke: color('--series-2'), 'stroke-width': 1, 'stroke-dasharray': '4,4', opacity: 0.55 }));
+  }
+
+  points.forEach(p => {
+    const dotColor = p.y > 25 ? color('--series-2') : color('--series-1');
+    const c = el('circle', { cx: x(p.x), cy: y(p.y), r: 4.5, fill: dotColor, opacity: 0.8 });
+    c.addEventListener('mouseenter', (evt) => {
+      showTooltip(evt.clientX, evt.clientY,
+        [{ label: 'Stress', color: dotColor, value: Math.round(p.y).toString() }],
+        `${p.date ? fmtDateFull(p.date) : ''} — ${p.x.toFixed(1)}h sleep`);
+    });
+    c.addEventListener('mouseleave', hideTooltip);
+    svg.appendChild(c);
+  });
+
+  // simple linear regression trend line
+  if (points.length >= 3) {
+    const n = points.length;
+    const meanX = xs.reduce((a, b) => a + b, 0) / n;
+    const meanY = ys.reduce((a, b) => a + b, 0) / n;
+    let num = 0, den = 0;
+    points.forEach(p => { num += (p.x - meanX) * (p.y - meanY); den += (p.x - meanX) ** 2; });
+    if (den > 0) {
+      const slope = num / den;
+      const intercept = meanY - slope * meanX;
+      const clampY = v => Math.max(yMin, Math.min(yMax, v));
+      const y1 = clampY(intercept + slope * xMin), y2 = clampY(intercept + slope * xMax);
+      svg.appendChild(el('line', {
+        x1: x(xMin), x2: x(xMax), y1: y(y1), y2: y(y2),
+        stroke: color('--text-secondary'), 'stroke-width': 2, 'stroke-dasharray': '2,3',
+      }));
+    }
+  }
+}
+
+function stressVsSleepPoints() {
+  return DAYS
+    .filter(d => d.stress_is_daily && d.sleep_seconds != null && d.avg_stress != null)
+    .map(d => ({ x: d.sleep_seconds / 3600, y: d.avg_stress, date: d.date }));
+}
+
+function renderStressVsSleep() {
+  const card = document.getElementById('stressSleepCard');
+  const points = stressVsSleepPoints();
+  document.getElementById('stressSleepSub').textContent =
+    `Average daily stress vs sleep duration that morning — all-time, real per-day readings only (n=${points.length})`;
+  if (points.length < 3) { card.hidden = true; return; }
+  card.hidden = false;
+  renderScatter(document.getElementById('stressSleepChart'), points, { stressThreshold: true });
+}
+
+// ---------- stress the day after a hard session ----------
+function prevDateStr(dateStr) { return utcToYmd(ymdToUTC(dateStr) - DAY_MS); }
+
+function renderStressAfterTraining() {
+  const card = document.getElementById('stressAfterCard');
+  const workoutsByDate = {};
+  WORKOUTS.forEach(w => { if (w.date) (workoutsByDate[w.date] = workoutsByDate[w.date] || []).push(w); });
+
+  const afterHard = [], afterRest = [];
+  DAYS.forEach(d => {
+    if (!d.stress_is_daily || d.avg_stress == null) return;
+    const prevWorkouts = workoutsByDate[prevDateStr(d.date)] || [];
+    const hadHard = prevWorkouts.some(w => (w.aerobic_te || 0) >= 3 || (w.anaerobic_te || 0) >= 3);
+    if (hadHard) afterHard.push(d);
+    else if (!prevWorkouts.length) afterRest.push(d);
+  });
+
+  document.getElementById('stressAfterSub').textContent =
+    `Day after a hard workout (training effect ≥ 3, n=${afterHard.length}) vs a full rest day (n=${afterRest.length}) — all-time, real per-day readings only`;
+  if (afterHard.length < 1 || afterRest.length < 1) { card.hidden = true; return; }
+  card.hidden = false;
+
+  renderKpiRow(document.getElementById('stressAfterKpiRow'), [
+    { label: 'Stress — after hard session', value: Math.round(avgOf(afterHard, 'avg_stress')), unit: '/ 100' },
+    { label: 'Stress — after rest day', value: Math.round(avgOf(afterRest, 'avg_stress')), unit: '/ 100' },
+    { label: 'Resting HR — after hard session', value: avgOf(afterHard, 'resting_hr') != null ? Math.round(avgOf(afterHard, 'resting_hr')) : '—', unit: 'bpm' },
+    { label: 'Resting HR — after rest day', value: avgOf(afterRest, 'resting_hr') != null ? Math.round(avgOf(afterRest, 'resting_hr')) : '—', unit: 'bpm' },
+  ]);
+}
+
+// ---------- VO2 Max / training status / fitness age ----------
+function renderVo2max() {
+  const card = document.getElementById('vo2maxCard');
+  if (VO2MAX.length < 2) { card.hidden = true; return; }
+  card.hidden = false;
+  buildChart(document.getElementById('vo2maxChart'), {
+    rows: VO2MAX, xLabel: r => fmtDate(r.date), tickEvery: Math.max(1, Math.round(VO2MAX.length / 6)),
+    series: [{ key: 'vo2max', label: 'VO2 Max', color: color('--series-1') }],
+    mode: 'line', valueFmt: v => v.toFixed(1),
+  });
+}
+
+// Codes per Garmin's own scale - unverified against this exact API version,
+// see GARMIN_API_NOTES.md. Cross-check against the Garmin Connect app before
+// trusting a specific label.
+const TRAINING_STATUS_LABELS = {
+  0: 'No status', 1: 'Detraining', 2: 'Recovery', 3: 'Maintaining',
+  4: 'Productive', 5: 'Peaking', 6: 'Overreaching', 7: 'Unproductive', 8: 'Strained',
+};
+
+function renderLoadGauge(svg, current, lo, hi) {
+  svg.innerHTML = '';
+  const W = 800, H = 60;
+  const padL = 14, padR = 14, barY = 22, barH = 14;
+  const maxScale = Math.max(hi * 1.3, current * 1.15, 1);
+  const xOf = v => padL + (Math.min(v, maxScale) / maxScale) * (W - padL - padR);
+  svg.appendChild(el('rect', { x: padL, y: barY, width: W - padL - padR, height: barH, rx: 7, fill: color('--gridline') }));
+  svg.appendChild(el('rect', { x: xOf(lo), y: barY, width: Math.max(0, xOf(hi) - xOf(lo)), height: barH, rx: 7, fill: color('--series-3'), opacity: 0.35 }));
+  const mx = xOf(current);
+  const markerColor = current < lo ? color('--series-4') : current > hi ? color('--series-2') : color('--series-3');
+  svg.appendChild(el('line', { x1: mx, x2: mx, y1: barY - 6, y2: barY + barH + 6, stroke: markerColor, 'stroke-width': 3 }));
+  const lbl = (x, txt) => { const t = el('text', { x, y: barY + barH + 18, class: 'axis-label', 'text-anchor': 'middle' }); t.textContent = txt; svg.appendChild(t); };
+  lbl(xOf(lo), 'min ' + Math.round(lo));
+  lbl(xOf(hi), 'max ' + Math.round(hi));
+  const above = el('text', { x: mx, y: barY - 10, class: 'axis-label', 'text-anchor': 'middle' });
+  above.textContent = 'load ' + Math.round(current);
+  above.style.fontWeight = '650';
+  svg.appendChild(above);
+}
+
+function renderTrainingStatus() {
+  const card = document.getElementById('trainingStatusCard');
+  if (!TRAINING_STATUS || TRAINING_STATUS.weekly_load == null) { card.hidden = true; return; }
+  card.hidden = false;
+  const ts = TRAINING_STATUS;
+  const label = TRAINING_STATUS_LABELS[ts.status_code] || `Code ${ts.status_code}`;
+
+  document.getElementById('tsSub').textContent =
+    `Weekly training load vs your optimal range — as of ${fmtDate(ts.date)}, ${ts.sport ? ts.sport.toLowerCase() : ''}`;
+
+  renderKpiRow(document.getElementById('tsKpiRow'), [
+    { label: 'Status', value: label },
+    { label: 'Weekly load', value: Math.round(ts.weekly_load) },
+  ]);
+
+  if (ts.load_min != null && ts.load_max != null) {
+    renderLoadGauge(document.getElementById('tsGauge'), ts.weekly_load, ts.load_min, ts.load_max);
+  }
+
+  document.getElementById('tsNote').innerHTML =
+    '<strong>Note:</strong> the status label mapping is community-documented, not officially confirmed for this account — cross-check against the Garmin Connect app if it looks off.';
+}
+
+function renderFitnessAge() {
+  const card = document.getElementById('fitnessAgeCard');
+  if (!FITNESS_AGE || FITNESS_AGE.fitness_age == null) { card.hidden = true; return; }
+  card.hidden = false;
+  const fa = FITNESS_AGE;
+  document.getElementById('faSub').textContent = `As of ${fmtDate(fa.date)}`;
+  renderKpiRow(document.getElementById('faKpiRow'), [
+    { label: 'Chronological age', value: fa.chronological_age != null ? Math.round(fa.chronological_age) : '—' },
+    { label: 'Fitness age', value: fa.fitness_age != null ? Math.round(fa.fitness_age) : '—' },
+    { label: 'Achievable fitness age', value: fa.achievable_fitness_age != null ? Math.round(fa.achievable_fitness_age) : '—' },
+  ]);
+}
+
 function renderOverview() {
   const firstDay = DAYS[0].date, lastDay = DAYS[DAYS.length - 1].date;
   document.getElementById('subhead').textContent =
@@ -953,7 +1196,8 @@ function renderOverview() {
 
   document.getElementById('note').innerHTML =
     '<strong>Not shown:</strong> HRV, body battery, and training readiness — Garmin returns no data for these from this device. ' +
-    'Sleep coverage varies by year depending on whether the watch was worn overnight — gray cells in the sleep grid mean no reading, not zero sleep.';
+    'Sleep coverage varies by year depending on whether the watch was worn overnight — gray cells in the sleep grid mean no reading, not zero sleep. ' +
+    'Stress is a 0–100 estimate from heart rate and its variability, never measured during a tracked activity, and can\'t tell "good" stress (excitement, a race) from "bad" stress (work pressure) apart.';
 
   document.getElementById('prevMonthBtn').addEventListener('click', () => {
     const months = monthsAvailable();
@@ -969,6 +1213,11 @@ function renderOverview() {
   renderYearChart();
   renderWeeklySportChart();
   renderSleepSection();
+  renderStressVsSleep();
+  renderStressAfterTraining();
+  renderVo2max();
+  renderTrainingStatus();
+  renderFitnessAge();
   selectMonth(monthsAvailable()[monthsAvailable().length - 1]);
 }
 
@@ -1345,6 +1594,9 @@ async function init() {
   DAYS = data.days;
   WORKOUTS = data.workouts;
   SLEEP_HISTORY = data.sleep_history || {};
+  VO2MAX = data.vo2max || [];
+  TRAINING_STATUS = data.training_status || null;
+  FITNESS_AGE = data.fitness_age || null;
   renderOverview();
   document.getElementById('view-loading').hidden = true;
   syncFromHash();

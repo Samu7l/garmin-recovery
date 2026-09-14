@@ -90,6 +90,8 @@ def fetch_wellness_day(client, day_str):
         "body_battery": lambda: client.get_body_battery(day_str, day_str),
         "stress": lambda: client.get_stress_data(day_str),
         "training_readiness": lambda: client.get_training_readiness(day_str),
+        "training_status": lambda: client.get_training_status(day_str),
+        "fitness_age": lambda: client.get_fitnessage_data(day_str),
     }.items():
         try:
             raw[key] = fetch()
