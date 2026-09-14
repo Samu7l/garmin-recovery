@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
 echo === Pulling recent Garmin data ===
-python garmin_sync.py --days 5
+python garmin_sync.py --days 14
 echo.
 echo === Fetching GPS/pace/laps for any new activities ===
 python garmin_activity_detail.py

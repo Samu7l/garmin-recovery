@@ -15,7 +15,7 @@ if [ ! -x "$PYTHON" ]; then
 fi
 
 echo "=== Pulling recent Garmin data ==="
-"$PYTHON" garmin_sync.py --days 5
+"$PYTHON" garmin_sync.py --days 14
 
 echo
 echo "=== Fetching GPS/pace/laps for any new activities ==="
