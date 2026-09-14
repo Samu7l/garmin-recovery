@@ -2,21 +2,28 @@
 # macOS equivalent of refresh.bat: double-click this file in Finder to run it.
 cd "$(dirname "$0")"
 
-# Double-clicking (or running "./refresh.command") starts a non-interactive
-# shell that never sources ~/.zshrc, so the Anaconda python3 that has
-# garminconnect/curl_cffi/Pillow installed wouldn't be on PATH otherwise.
-export PATH="/opt/anaconda3/bin:$PATH"
+# Uses the project's own venv (.venv/, created by "python3 -m venv .venv" +
+# "pip install -r requirements.txt") so it never depends on whichever
+# python3/pip happens to be first on PATH in a given terminal session.
+PYTHON="./.venv/bin/python3"
+if [ ! -x "$PYTHON" ]; then
+    echo "No .venv found. Run this first:"
+    echo "  cd garmin-ai && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt"
+    read -n 1 -s -r -p "Press any key to close this window..."
+    echo
+    exit 1
+fi
 
 echo "=== Pulling recent Garmin data ==="
-python3 garmin_sync.py --days 5
+"$PYTHON" garmin_sync.py --days 5
 
 echo
 echo "=== Fetching GPS/pace/laps for any new activities ==="
-python3 garmin_activity_detail.py
+"$PYTHON" garmin_activity_detail.py
 
 echo
 echo "=== Rebuilding the GitHub Pages site ==="
-python3 build_site.py
+"$PYTHON" build_site.py
 
 echo
 echo "=== Publishing to GitHub ==="
